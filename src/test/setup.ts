@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
+import { cartStore } from '@/features/cart/cart-store'
 import { mockStore } from './msw/handlers'
 import { server } from './msw/server'
 
@@ -13,6 +14,8 @@ afterEach(() => {
   // Drop handlers added with server.use() in a single test, and orders placed through the mocks.
   server.resetHandlers()
   mockStore.reset()
+  cartStore.clear()
+  localStorage.clear()
 })
 
 afterAll(() => server.close())

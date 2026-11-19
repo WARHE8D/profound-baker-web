@@ -8,6 +8,7 @@ export const catalogueKeys = {
   all: ['catalogue'] as const,
   categories: () => [...catalogueKeys.all, 'categories'] as const,
   items: (categoryId: string | null) => [...catalogueKeys.all, 'items', { categoryId }] as const,
+  item: (id: string) => [...catalogueKeys.all, 'item', id] as const,
 }
 
 /** Every category, for the storefront filter. They change rarely, so they stay fresh longer. */
@@ -42,4 +43,12 @@ export const catalogueItemsQuery = (categoryId: string | null) =>
       ),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.hasNext ? last.number + 1 : undefined),
+  })
+
+/** One available item. 404 when it doesn't exist or the Owner has hidden it. */
+export const catalogueItemQuery = (id: string) =>
+  queryOptions({
+    queryKey: catalogueKeys.item(id),
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/public/catalogue/items/{id}', { params: { path: { id } }, signal })),
   })

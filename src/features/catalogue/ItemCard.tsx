@@ -1,5 +1,6 @@
 import { Clock, Croissant } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { apiUrl, type Schema } from '@/api'
 import { Badge } from '@/components'
 import { cn } from '@/lib/cn'
@@ -14,12 +15,12 @@ type ItemCardProps = {
   showCategory?: boolean
 }
 
-/** One item in the storefront grid: thumbnail, name, price and lead time. */
+/** One item in the storefront grid: thumbnail, name, price and lead time. Links to its page. */
 export function ItemCard({ item, showCategory = false }: ItemCardProps) {
   const soldOut = !item.orderable
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface">
+    <article className="relative flex h-full flex-col overflow-hidden rounded-card border border-border bg-surface transition-shadow focus-within:ring-2 focus-within:ring-ring hover:shadow-md">
       <ItemThumbnail src={apiUrl(item.thumbnailUrls[0])} dimmed={soldOut} />
       <div className="flex flex-1 flex-col gap-2 p-4">
         {showCategory && (
@@ -27,7 +28,15 @@ export function ItemCard({ item, showCategory = false }: ItemCardProps) {
             {item.category.name}
           </p>
         )}
-        <h3 className="text-lg leading-snug font-semibold">{item.name}</h3>
+        <h3 className="text-lg leading-snug font-semibold">
+          {/* The ::after overlay stretches the link over the whole card. */}
+          <Link
+            to={`/items/${item.id}`}
+            className="outline-none after:absolute after:inset-0 hover:text-primary"
+          >
+            {item.name}
+          </Link>
+        </h3>
         <div className="mt-auto flex items-center justify-between gap-3 pt-2">
           <p className="text-base font-semibold text-primary">{formatMoney(item.price)}</p>
           {soldOut && <Badge tone="warning">Sold out</Badge>}
