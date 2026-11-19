@@ -36,13 +36,25 @@ restart, so restarting the server signs you out.
 
 ### 2. Run the front end
 
-You need Node.js 20+.
+You need Node.js 26+ (pinned in `.nvmrc`, so `nvm use` picks it up).
 
 ```bash
 npm install
 cp .env.example .env.local    # then set the API URL, see below
 npm run dev                   # http://localhost:5173
 ```
+
+### Project layout
+
+| Path | Holds |
+|---|---|
+| `src/app/` | App entry: root component, providers, router |
+| `src/api/` | The API client and generated API types |
+| `src/features/<area>/` | One folder per feature area (catalogue, cart, checkout, orders, …) |
+| `src/components/` | Shared UI primitives |
+| `src/lib/` | Framework-free helpers (money, dates, …) |
+
+Import from `src` with the `@/` alias, for example `import { App } from '@/app/App'`.
 
 ### Configuration
 
@@ -57,10 +69,12 @@ Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets i
 | Command | What it does |
 |---|---|
 | `npm run dev` | Start the dev server with hot reload on port 5173 |
-| `npm run build` | Build for production into `dist/` |
+| `npm run build` | Type-check, then build for production into `dist/` |
 | `npm run preview` | Serve the production build locally |
-| `npm run lint` | Lint the code |
-| `npm test` | Run the tests |
+| `npm run lint` | Lint the code (oxlint) |
+
+Tests, type-check-only and formatting scripts arrive with the tooling issue
+([#2](https://github.com/WARHE8D/profound-baker-web/issues/2)).
 
 ## Working with the API
 
