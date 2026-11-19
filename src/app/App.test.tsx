@@ -2,8 +2,10 @@ import { render, screen } from '@testing-library/react'
 import { expect, test } from 'vitest'
 import { App } from './App'
 
-test('renders the SugarCrumbs heading', () => {
+test('boots the real app on the storefront home page', async () => {
   render(<App />)
 
-  expect(screen.getByRole('heading', { level: 1, name: 'SugarCrumbs' })).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { level: 1, name: /fresh from the oven/i }),
+  ).toBeInTheDocument()
 })

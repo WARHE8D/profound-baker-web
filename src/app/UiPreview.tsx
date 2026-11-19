@@ -13,8 +13,7 @@ import {
 } from '@/components'
 
 /**
- * Development-only gallery of the UI primitives (S0.3). Rendered by App in dev builds;
- * moves to a /dev/ui route when routing lands (S0.4).
+ * Development-only gallery of the UI primitives (S0.3), shown at /dev/ui in `npm run dev`.
  */
 export function UiPreview() {
   const [dialogOpen, setDialogOpen] = useState(false)
