@@ -38,6 +38,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # src/api/schema.d.ts must match the committed spec snapshot (openapi/openapi.json).
+      # Refresh both with `npm run api:types` against a running backend.
+      - name: API types are up to date
+        run: npm run api:check
+
       - name: Type-check
         run: npm run typecheck
 
