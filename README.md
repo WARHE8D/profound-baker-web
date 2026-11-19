@@ -56,6 +56,21 @@ npm run dev                   # http://localhost:5173
 
 Import from `src` with the `@/` alias, for example `import { App } from '@/app/App'`.
 
+### Routes
+
+The route table is [src/app/routes.tsx](src/app/routes.tsx). There are two trees, each with its own
+layout and error boundary:
+
+| Path       | What                                                                        |
+| ---------- | --------------------------------------------------------------------------- |
+| `/`        | Storefront: header with cart, page, footer                                  |
+| `/owner/*` | Owner dashboard: sidebar navigation (sign-in guard arrives with owner auth) |
+| `/dev/ui`  | Development only: gallery of the UI primitives; not in production builds    |
+
+Unknown URLs show a 404 page inside the matching layout. If a page crashes, the error shows inside
+the layout so the navigation keeps working. In `npm run dev`, the TanStack Query devtools button sits
+in the bottom-left corner.
+
 ### Configuration
 
 | Variable            | Example                 | Purpose                                                                              |
