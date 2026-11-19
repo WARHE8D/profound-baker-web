@@ -16,6 +16,7 @@ afterEach(() => {
   mockStore.reset()
   cartStore.clear()
   localStorage.clear()
+  sessionStorage.clear()
 })
 
 afterAll(() => server.close())

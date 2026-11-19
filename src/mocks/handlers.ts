@@ -283,15 +283,25 @@ const REASONS: Record<number, string> = {
 
 function validateCheckout(body: Schema<'CheckoutRequest'>): FieldError[] {
   const errors: FieldError[] = []
+  // The backend's bean validation: GuestContactRequest and CheckoutRequest.
   const contact = body.guestContact ?? { name: '', email: '', phone: '' }
+  const tooLong = (field: string, value: string | null | undefined, max: number) => {
+    if ((value ?? '').length > max) {
+      errors.push({ field, message: `size must be between 0 and ${max}` })
+    }
+  }
   if (!contact.name?.trim())
     errors.push({ field: 'guestContact.name', message: 'must not be blank' })
+  tooLong('guestContact.name', contact.name, 150)
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact.email ?? '')) {
     errors.push({ field: 'guestContact.email', message: 'must be a well-formed email address' })
   }
+  tooLong('guestContact.email', contact.email, 254)
   if (!contact.phone?.trim()) {
     errors.push({ field: 'guestContact.phone', message: 'must not be blank' })
   }
+  tooLong('guestContact.phone', contact.phone, 30)
+  tooLong('notes', body.notes, 1000)
   if (!body.lines?.length) errors.push({ field: 'lines', message: 'must not be empty' })
   body.lines?.forEach((line, index) => {
     if ((line.quantity ?? 1) < 1) {

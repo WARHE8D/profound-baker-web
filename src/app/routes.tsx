@@ -1,7 +1,6 @@
 import type { RouteObject } from 'react-router'
 import { CartPage } from '@/features/cart/CartPage'
 import { CataloguePage } from '@/features/catalogue/CataloguePage'
-import { CheckoutPage } from '@/features/checkout/CheckoutPage'
 import { ItemPage } from '@/features/catalogue/ItemPage'
 import { OwnerLayout } from './layouts/OwnerLayout'
 import { ownerNav } from './layouts/owner-nav'
@@ -39,7 +38,20 @@ export const routes: RouteObject[] = [
           { index: true, Component: CataloguePage },
           { path: 'items/:itemId', Component: ItemPage },
           { path: 'cart', Component: CartPage },
-          { path: 'checkout', Component: CheckoutPage },
+          // Checkout is split into its own chunk: the form libraries (Zod, React Hook Form) only
+          // load once a guest gets there.
+          {
+            path: 'checkout',
+            lazy: async () => ({
+              Component: (await import('@/features/checkout/CheckoutPage')).CheckoutPage,
+            }),
+          },
+          {
+            path: 'checkout/confirmation',
+            lazy: async () => ({
+              Component: (await import('@/features/checkout/ConfirmationPage')).ConfirmationPage,
+            }),
+          },
           ...devRoutes,
           { path: '*', Component: NotFoundPage },
         ],
