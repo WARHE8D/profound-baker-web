@@ -157,5 +157,6 @@ API, which uses Docker Compose with Caddy for TLS.
 
 ## Related
 
+- Roadmap and sprints: [docs/PLAN.md](docs/PLAN.md), issue checklists in [docs/ISSUES.md](docs/ISSUES.md)
 - Backend: [WARHE8D/profound-baker-server](https://github.com/WARHE8D/profound-baker-server)
 - API reference: `/swagger-ui.html` on the running server, or `/v3/api-docs` for OpenAPI JSON
