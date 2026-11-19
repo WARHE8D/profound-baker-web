@@ -2,12 +2,12 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import type { Schema } from '@/api'
 import { Button, EmptyState, ErrorState } from '@/components'
+import { isUuid } from '@/lib/uuid'
 import { CategoryFilter } from './CategoryFilter'
 import { ItemCard, ItemCardSkeleton } from './ItemCard'
 import { catalogueItemsQuery, categoriesQuery } from './queries'
 
 const SKELETON_COUNT = 8
-const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
 
 const GRID = 'grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 sm:gap-6'
 
@@ -15,8 +15,8 @@ const GRID = 'grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-3 lg:g
 export function CataloguePage() {
   const [searchParams] = useSearchParams()
   const categoryParam = searchParams.get('category')
-  // The backend answers a malformed UUID with 400, so such a link never reaches it.
-  const categoryId = categoryParam !== null && UUID.test(categoryParam) ? categoryParam : null
+  // A malformed id would get a 400, so such a link never reaches the API.
+  const categoryId = isUuid(categoryParam) ? categoryParam : null
 
   const categories = useQuery(categoriesQuery())
   const items = useInfiniteQuery({

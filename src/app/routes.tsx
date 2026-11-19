@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router'
 import { CataloguePage } from '@/features/catalogue/CataloguePage'
+import { ItemPage } from '@/features/catalogue/ItemPage'
 import { OwnerLayout } from './layouts/OwnerLayout'
 import { ownerNav } from './layouts/owner-nav'
 import { PublicLayout } from './layouts/PublicLayout'
@@ -34,6 +35,7 @@ export const routes: RouteObject[] = [
         ErrorBoundary: RouteErrorBoundary,
         children: [
           { index: true, Component: CataloguePage },
+          { path: 'items/:itemId', Component: ItemPage },
           ...devRoutes,
           { path: '*', Component: NotFoundPage },
         ],

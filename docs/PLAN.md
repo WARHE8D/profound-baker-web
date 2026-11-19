@@ -71,7 +71,8 @@ the catalogue, availability, orders, invoices and stats.
 
 - **S2.1 Catalogue page:** category filter; item cards with thumbnails, price and lead time; loading,
   empty and error states.
-- **S2.2 Item detail:** image gallery; description; stock; add to cart.
+- **S2.2 Item detail:** image gallery; description; sold-out state; add to cart. The public API sends
+  `orderable` but no stock count, so the cart caps each item at 20 and checkout enforces real stock.
 - **S2.3 Cart:** persisted in `localStorage`; quantity limits; removes or flags items that are no longer
   available; cart drawer.
 
