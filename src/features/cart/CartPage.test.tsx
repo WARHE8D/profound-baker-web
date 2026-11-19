@@ -1,11 +1,19 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { expect, test } from 'vitest'
+import { beforeAll, expect, test } from 'vitest'
 import { ids, items, toPublicItem } from '@/mocks/fixtures'
 import { server } from '@/test/msw/server'
 import { renderRoute } from '@/test/render'
 import { cartStore } from './cart-store'
+
+// /checkout is lazy-loaded; load it once up front so no test waits on compiling it.
+beforeAll(async () => {
+  await Promise.all([
+    import('@/features/checkout/CheckoutPage'),
+    import('@/features/checkout/ConfirmationPage'),
+  ])
+})
 
 const ITEM_URL = 'http://localhost:8080/api/public/catalogue/items/:id'
 const fixture = (id: string) => toPublicItem(items.find((i) => i.id === id)!)
@@ -148,5 +156,5 @@ test('checkout from the drawer goes to the checkout page', async () => {
   await userEvent.click(await within(drawer).findByRole('link', { name: 'Checkout' }))
 
   await waitFor(() => expect(router.state.location.pathname).toBe('/checkout'))
-  expect(screen.getByRole('heading', { level: 1, name: 'Checkout' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: 'Checkout' })).toBeInTheDocument()
 })

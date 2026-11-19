@@ -1,13 +1,21 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import { cartStore } from '@/features/cart/cart-store'
 import { FIXTURE_TIME_ZONE, ids, items, toPublicItem } from '@/mocks/fixtures'
 import { slotToUtc } from '@/lib/time'
 import { mockStore } from '@/test/msw/handlers'
 import { server } from '@/test/msw/server'
 import { renderRoute } from '@/test/render'
+
+// /checkout is lazy-loaded; load it once up front so no test waits on compiling it.
+beforeAll(async () => {
+  await Promise.all([
+    import('@/features/checkout/CheckoutPage'),
+    import('@/features/checkout/ConfirmationPage'),
+  ])
+})
 
 // Friday 20 November 2026, 12:00 at the bakery (New York).
 const NOW = new Date('2026-11-20T17:00:00Z')

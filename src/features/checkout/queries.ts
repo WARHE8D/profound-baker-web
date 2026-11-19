@@ -3,6 +3,7 @@ import { api, unwrap } from '@/api'
 
 export const checkoutKeys = {
   bakery: ['bakery'] as const,
+  availabilityAll: ['availability'] as const,
   availability: (from: string, to: string) => ['availability', { from, to }] as const,
 }
 

@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ButtonLink, EmptyState, Spinner } from '@/components'
 import { useCheckedCart, type CheckedCart } from '@/features/cart/cart-check'
 import { formatMoney } from '@/lib/money'
 import { formatLocal } from '@/lib/time'
+import { CheckoutForm } from './CheckoutForm'
 import { longestLeadTime } from './slots'
 import { SlotPicker, type PickupSelection } from './SlotPicker'
 
 /**
- * `/checkout`. Step 1 (S3.1) picks the pickup time; the guest's details and placing the order
- * follow in S3.2.
+ * `/checkout`: step 1 picks the pickup time, step 2 takes the guest's details and places the
+ * order.
  */
 export function CheckoutPage() {
   const cart = useCheckedCart()
@@ -24,6 +25,21 @@ export function CheckoutPage() {
 
 function CheckoutBody({ cart }: { cart: CheckedCart }) {
   const [pickup, setPickup] = useState<PickupSelection | null>(null)
+  const [pickupProblem, setPickupProblem] = useState<string | null>(null)
+  const pickupHeading = useRef<HTMLHeadingElement>(null)
+
+  function choosePickup(selection: PickupSelection | null) {
+    setPickup(selection)
+    if (selection) setPickupProblem(null)
+  }
+
+  /** Back to step 1 with a reason: no slot picked, it was taken, or it is too soon. */
+  function showPickupProblem(message: string, { focus = true }: { focus?: boolean } = {}) {
+    setPickupProblem(message)
+    if (!focus) return
+    // Focusing also scrolls it into view (scroll-mt keeps a little room above).
+    pickupHeading.current?.focus()
+  }
 
   if (cart.lines.length === 0) {
     return (
@@ -63,18 +79,23 @@ function CheckoutBody({ cart }: { cart: CheckedCart }) {
     <div className="grid gap-8 lg:grid-cols-[1fr_20rem] lg:gap-12">
       <div className="flex flex-col gap-8">
         <section aria-labelledby="pickup-heading" className="flex flex-col gap-4">
-          <h2 id="pickup-heading" className="text-xl font-semibold">
+          <h2
+            id="pickup-heading"
+            ref={pickupHeading}
+            tabIndex={-1}
+            className="scroll-mt-6 text-xl font-semibold outline-none"
+          >
             1. Pickup time
           </h2>
-          <SlotPicker leadTimeHours={leadTimeHours} value={pickup} onChange={setPickup} />
+          {pickupProblem && (
+            <p role="alert" className="rounded-control bg-danger/10 px-4 py-3 text-sm">
+              {pickupProblem}
+            </p>
+          )}
+          <SlotPicker leadTimeHours={leadTimeHours} value={pickup} onChange={choosePickup} />
         </section>
 
-        <section aria-labelledby="details-heading" className="flex flex-col gap-2">
-          <h2 id="details-heading" className="text-xl font-semibold text-muted">
-            2. Your details
-          </h2>
-          <p className="text-sm text-muted">Contact details and placing the order come next.</p>
-        </section>
+        <CheckoutForm cart={cart} pickup={pickup} onPickupProblem={showPickupProblem} />
       </div>
 
       <OrderSummary cart={cart} pickup={pickup} />
