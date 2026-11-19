@@ -1,5 +1,5 @@
-import { Link, useLocation } from 'react-router'
-import { EmptyState } from '@/components'
+import { useLocation } from 'react-router'
+import { ButtonLink, EmptyState } from '@/components'
 
 /** Shown for unknown URLs; links back to the home of whichever half of the app it is in. */
 export function NotFoundPage() {
@@ -13,12 +13,9 @@ export function NotFoundPage() {
         title="We couldn't find that page"
         description="The link may be old, or the page may have moved."
         action={
-          <Link
-            to={inOwner ? '/owner' : '/'}
-            className="inline-flex h-10 items-center rounded-control bg-primary px-4 text-sm font-medium text-primary-fg hover:bg-primary-hover"
-          >
+          <ButtonLink to={inOwner ? '/owner' : '/'}>
             {inOwner ? 'Back to dashboard' : 'Back to the shop'}
-          </Link>
+          </ButtonLink>
         }
       />
     </div>

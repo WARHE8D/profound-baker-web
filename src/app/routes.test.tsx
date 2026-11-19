@@ -15,7 +15,7 @@ test('/ shows the storefront: header, cart button, page and footer', async () =>
   ).toBeInTheDocument()
   const banner = screen.getByRole('banner')
   expect(within(banner).getByRole('link', { name: 'SugarCrumbs' })).toHaveAttribute('href', '/')
-  expect(within(banner).getByRole('button', { name: 'Cart, 0 items' })).toBeDisabled()
+  expect(within(banner).getByRole('button', { name: 'Cart, 0 items' })).toBeEnabled()
   expect(screen.getByRole('main')).toBeInTheDocument()
   expect(
     within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Owner sign in' }),

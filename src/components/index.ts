@@ -1,5 +1,7 @@
 export { Badge, type BadgeTone } from './Badge'
 export { Button } from './Button'
+export { buttonClass, type ButtonSize, type ButtonVariant } from './button-styles'
+export { ButtonLink } from './ButtonLink'
 export { Input, Select, Textarea } from './controls'
 export { Dialog } from './Dialog'
 export { EmptyState } from './EmptyState'

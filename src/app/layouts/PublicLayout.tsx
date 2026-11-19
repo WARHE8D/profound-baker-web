@@ -1,6 +1,8 @@
 import { ShoppingBag } from 'lucide-react'
 import { Link, Outlet, ScrollRestoration } from 'react-router'
+import { useState } from 'react'
 import { Button } from '@/components'
+import { CartDrawer } from '@/features/cart/CartDrawer'
 import { useCartCount } from '@/features/cart/cart-store'
 import { SkipLink } from './SkipLink'
 
@@ -10,6 +12,7 @@ const YEAR = new Date().getFullYear()
 /** Storefront chrome: header with the cart button, page content, footer. */
 export function PublicLayout() {
   const cartCount = useCartCount()
+  const [cartOpen, setCartOpen] = useState(false)
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -19,12 +22,11 @@ export function PublicLayout() {
           <Link to="/" className="font-display text-2xl font-semibold text-primary">
             SugarCrumbs
           </Link>
-          {/* The cart drawer arrives in S2.3 (#10); until then the button only shows the count. */}
           <Button
             variant="ghost"
-            disabled
+            onClick={() => setCartOpen(true)}
             aria-label={`Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}`}
-            title="Cart (coming soon)"
+            aria-haspopup="dialog"
           >
             <ShoppingBag aria-hidden="true" className="size-5" />
             <span className="hidden sm:inline">Cart</span>
@@ -52,6 +54,7 @@ export function PublicLayout() {
           </Link>
         </div>
       </footer>
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
       <ScrollRestoration />
     </div>
   )

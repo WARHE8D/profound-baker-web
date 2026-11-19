@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import type { Schema } from '@/api'
-import { Button, EmptyState, ErrorState } from '@/components'
+import { Button, ButtonLink, EmptyState, ErrorState } from '@/components'
 import { isUuid } from '@/lib/uuid'
 import { CategoryFilter } from './CategoryFilter'
 import { ItemCard, ItemCardSkeleton } from './ItemCard'
@@ -155,12 +155,5 @@ function LoadingGrid() {
 }
 
 function ShowAllLink() {
-  return (
-    <Link
-      to={{ search: '' }}
-      className="inline-flex h-10 items-center rounded-control bg-primary px-4 text-sm font-medium text-primary-fg hover:bg-primary-hover"
-    >
-      See the whole menu
-    </Link>
-  )
+  return <ButtonLink to={{ search: '' }}>See the whole menu</ButtonLink>
 }
