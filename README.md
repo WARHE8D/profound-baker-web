@@ -117,6 +117,27 @@ The generator (`openapi-typescript`) only supports TypeScript 5, while this proj
 The scripts therefore run a pinned copy through `npm exec` with its own TypeScript 5, and it isn't
 listed in `package.json`.
 
+### Calling the API
+
+Import everything from `@/api`. `api` is the single client, and `unwrap()` returns a call's data or
+throws an `ApiError`:
+
+```ts
+import { api, unwrap, readPage, apiUrl, isApiError } from '@/api'
+
+const categories = await unwrap(api.GET('/api/public/catalogue/categories'))
+const items = readPage(await unwrap(api.GET('/api/public/catalogue/items')))
+const src = apiUrl(item.thumbnailUrls[0]) // makes /uploads/... absolute
+```
+
+- **Errors:** an `ApiError` has `status` (0 when the server can't be reached), `message`,
+  `fieldErrors` with a `fieldError(name)` lookup, `requestId` from `X-Request-Id`, and
+  `retryAfterSeconds` on a 429.
+- **Rate limits:** a 429 whose `Retry-After` is at most 10 seconds is retried once automatically.
+  Longer waits reach the UI as an error.
+- **Lists:** read every list response through `readPage()`, so the backend's planned change of page
+  shape needs no other edits.
+
 ### Tests and API mocks
 
 Tests live next to the code as `*.test.ts(x)`. API calls are mocked with [MSW](https://mswjs.io):
