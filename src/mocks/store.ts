@@ -59,7 +59,6 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     const slots: Schema<'TimeSlotResponse'>[] = []
     const [startH, startM] = hours.startTime.split(':').map(Number) as [number, number]
     const [endH, endM] = hours.endTime.split(':').map(Number) as [number, number]
-    const nowMs = now().getTime()
     for (
       let minutes = startH * 60 + startM;
       minutes + hours.slotDurationMinutes <= endH * 60 + endM;
@@ -81,7 +80,9 @@ export function createMockStore(options: { now?: () => Date } = {}) {
         endsAt,
         capacity: hours.maxConcurrentBookings,
         remainingCapacity,
-        bookable: remainingCapacity > 0 && Date.parse(startsAt) > nowMs,
+        // Like the backend: capacity only. Past and too-soon slots are the client's to hide, and
+        // checkout rejects them (pickupAt in the past, or within the lead time).
+        bookable: remainingCapacity > 0,
       })
     }
     return { date, open: true, reason: null, slots }
