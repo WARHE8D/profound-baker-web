@@ -81,20 +81,41 @@ Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets i
 
 ### Scripts
 
-| Command                           | What it does                                        |
-| --------------------------------- | --------------------------------------------------- |
-| `npm run dev`                     | Start the dev server with hot reload on port 5173   |
-| `npm run build`                   | Type-check, then build for production into `dist/`  |
-| `npm run preview`                 | Serve the production build locally                  |
-| `npm run typecheck`               | Type-check only                                     |
-| `npm run lint`                    | Lint with oxlint; warnings fail                     |
-| `npm run format` / `format:check` | Format with Prettier / check formatting             |
-| `npm test`                        | Run the tests once (Vitest + React Testing Library) |
-| `npm run test:watch`              | Run the tests in watch mode                         |
-| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/` |
+| Command                           | What it does                                          |
+| --------------------------------- | ----------------------------------------------------- |
+| `npm run dev`                     | Start the dev server with hot reload on port 5173     |
+| `npm run build`                   | Type-check, then build for production into `dist/`    |
+| `npm run preview`                 | Serve the production build locally                    |
+| `npm run typecheck`               | Type-check only                                       |
+| `npm run lint`                    | Lint with oxlint; warnings fail                       |
+| `npm run format` / `format:check` | Format with Prettier / check formatting               |
+| `npm test`                        | Run the tests once (Vitest + React Testing Library)   |
+| `npm run test:watch`              | Run the tests in watch mode                           |
+| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/`   |
+| `npm run api:types`               | Refresh the API spec and types from a running backend |
+| `npm run api:check`               | Check the API types match the committed spec          |
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `format:check`, `lint`, `typecheck`,
-`test:coverage` and `build` on every push and pull request.
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `format:check`, `lint`, `api:check`,
+`typecheck`, `test:coverage` and `build` on every push and pull request.
+
+### API types
+
+TypeScript types for every endpoint are generated from the backend's OpenAPI spec, so the compiler
+catches a wrong path, parameter or body. Two committed files hold them, and neither should be edited
+by hand:
+
+- `openapi/openapi.json`: a snapshot of the backend's `/v3/api-docs`.
+- `src/api/schema.d.ts`: the types generated from that snapshot. Import them through
+  `src/api/types.ts`, for example `Schema<'CheckoutRequest'>`.
+
+When the backend's API changes, start the backend and run `npm run api:types`. It reads the
+backend's address from `API_URL`, else `VITE_API_BASE_URL` in `.env.local`, else
+`http://localhost:8080`. Commit both files. CI runs `api:check` and fails if the types don't match
+the snapshot.
+
+The generator (`openapi-typescript`) only supports TypeScript 5, while this project uses TypeScript 7.
+The scripts therefore run a pinned copy through `npm exec` with its own TypeScript 5, and it isn't
+listed in `package.json`.
 
 ### Tests and API mocks
 
