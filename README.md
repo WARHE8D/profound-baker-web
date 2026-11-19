@@ -46,35 +46,46 @@ npm run dev                   # http://localhost:5173
 
 ### Project layout
 
-| Path | Holds |
-|---|---|
-| `src/app/` | App entry: root component, providers, router |
-| `src/api/` | The API client and generated API types |
+| Path                   | Holds                                                              |
+| ---------------------- | ------------------------------------------------------------------ |
+| `src/app/`             | App entry: root component, providers, router                       |
+| `src/api/`             | The API client and generated API types                             |
 | `src/features/<area>/` | One folder per feature area (catalogue, cart, checkout, orders, …) |
-| `src/components/` | Shared UI primitives |
-| `src/lib/` | Framework-free helpers (money, dates, …) |
+| `src/components/`      | Shared UI primitives                                               |
+| `src/lib/`             | Framework-free helpers (money, dates, …)                           |
 
 Import from `src` with the `@/` alias, for example `import { App } from '@/app/App'`.
 
 ### Configuration
 
-| Variable | Example | Purpose |
-|---|---|---|
+| Variable            | Example                 | Purpose                                                                              |
+| ------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
 | `VITE_API_BASE_URL` | `http://localhost:8080` | Origin of the profound-baker-server API. Item image URLs are relative to it as well. |
 
 Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets in them**.
 
 ### Scripts
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | Start the dev server with hot reload on port 5173 |
-| `npm run build` | Type-check, then build for production into `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run lint` | Lint the code (oxlint) |
+| Command                           | What it does                                        |
+| --------------------------------- | --------------------------------------------------- |
+| `npm run dev`                     | Start the dev server with hot reload on port 5173   |
+| `npm run build`                   | Type-check, then build for production into `dist/`  |
+| `npm run preview`                 | Serve the production build locally                  |
+| `npm run typecheck`               | Type-check only                                     |
+| `npm run lint`                    | Lint with oxlint; warnings fail                     |
+| `npm run format` / `format:check` | Format with Prettier / check formatting             |
+| `npm test`                        | Run the tests once (Vitest + React Testing Library) |
+| `npm run test:watch`              | Run the tests in watch mode                         |
+| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/` |
 
-Tests, type-check-only and formatting scripts arrive with the tooling issue
-([#2](https://github.com/WARHE8D/profound-baker-web/issues/2)).
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `format:check`, `lint`, `typecheck`,
+`test:coverage` and `build` on every push and pull request.
+
+### Tests and API mocks
+
+Tests live next to the code as `*.test.ts(x)`. API calls are mocked with [MSW](https://mswjs.io):
+shared handlers are in `src/test/msw/handlers.ts`, and a single test can override them with
+`server.use(...)`. Any request without a handler fails the test, so tests never reach a real server.
 
 ## Working with the API
 
@@ -84,14 +95,14 @@ parts that most affect the front end.
 
 ### Routes and access
 
-| Area | Public (no sign-in) | Owner (`Authorization: Bearer <accessToken>`) |
-|---|---|---|
-| Catalogue | `GET /api/public/catalogue/items`, `/items/{id}`, `/categories` | `/api/catalogue/items/**`, `/api/catalogue/categories/**` |
-| Availability | `GET /api/public/availability?date=` or `?from=&to=` (62 days at most) | `/api/availability/working-hours/**`, `/api/availability/blocked-dates/**` |
-| Orders | `POST /api/public/orders`, `GET /api/public/orders/by-token/{token}`, `POST …/by-token/{token}/cancel` | `/api/orders/**` |
-| Invoices | | `/api/invoices/**`, `/api/orders/{id}/invoice` |
-| Dashboard | | `GET /api/dashboard/summary`, `GET /api/dashboard/production?date=` |
-| Owner | | `/api/auth/me`, `/api/auth/logout`, `/api/owner/profile`, `/api/owner/password` |
+| Area         | Public (no sign-in)                                                                                    | Owner (`Authorization: Bearer <accessToken>`)                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Catalogue    | `GET /api/public/catalogue/items`, `/items/{id}`, `/categories`                                        | `/api/catalogue/items/**`, `/api/catalogue/categories/**`                       |
+| Availability | `GET /api/public/availability?date=` or `?from=&to=` (62 days at most)                                 | `/api/availability/working-hours/**`, `/api/availability/blocked-dates/**`      |
+| Orders       | `POST /api/public/orders`, `GET /api/public/orders/by-token/{token}`, `POST …/by-token/{token}/cancel` | `/api/orders/**`                                                                |
+| Invoices     |                                                                                                        | `/api/invoices/**`, `/api/orders/{id}/invoice`                                  |
+| Dashboard    |                                                                                                        | `GET /api/dashboard/summary`, `GET /api/dashboard/production?date=`             |
+| Owner        |                                                                                                        | `/api/auth/me`, `/api/auth/logout`, `/api/owner/profile`, `/api/owner/password` |
 
 A missing or invalid token returns **401** and the wrong role returns **403**.
 
@@ -128,8 +139,14 @@ Owner hasn't answered within 24 hours. Confirming an order creates its invoice (
 Every error has the same JSON body:
 
 ```json
-{ "timestamp": "…", "status": 400, "error": "Bad Request", "message": "…", "path": "/api/…",
-  "fieldErrors": [{ "field": "guestContact.email", "message": "…" }] }
+{
+  "timestamp": "…",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "…",
+  "path": "/api/…",
+  "fieldErrors": [{ "field": "guestContact.email", "message": "…" }]
+}
 ```
 
 - **400**: show each `fieldErrors` entry next to its form field.

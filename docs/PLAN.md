@@ -15,17 +15,17 @@ the catalogue, availability, orders, invoices and stats.
 
 ## Tech stack
 
-| Concern | Choice | Why |
-|---|---|---|
-| Build | Vite + React 19 + TypeScript (strict) | The backend's dev CORS already allows `localhost:5173` |
-| Routing | React Router (data router) | Separate public and owner route trees, with an auth guard on the owner tree |
-| Server state | TanStack Query | Caching and invalidation after mutations, with retry rules for 401, 409 and 429 |
-| API types | `openapi-typescript` generated from `/v3/api-docs` + `openapi-fetch` | Types come from the backend's contract instead of being written by hand |
-| Forms | React Hook Form + Zod | Shows the backend's `fieldErrors` next to the matching inputs |
-| Styling | Tailwind CSS v4 + a few local primitives (Button, Field, Dialog, Toast) | |
-| Dates | `date-fns` + `date-fns-tz` | Converts slot times in the Owner's time zone to UTC `pickupAt` |
-| Tests | Vitest + React Testing Library + MSW; Playwright for E2E | |
-| Quality | oxlint, Prettier, `tsc --noEmit`, GitHub Actions CI | oxlint ships with the Vite template and is much faster than ESLint |
+| Concern      | Choice                                                                  | Why                                                                             |
+| ------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Build        | Vite + React 19 + TypeScript (strict)                                   | The backend's dev CORS already allows `localhost:5173`                          |
+| Routing      | React Router (data router)                                              | Separate public and owner route trees, with an auth guard on the owner tree     |
+| Server state | TanStack Query                                                          | Caching and invalidation after mutations, with retry rules for 401, 409 and 429 |
+| API types    | `openapi-typescript` generated from `/v3/api-docs` + `openapi-fetch`    | Types come from the backend's contract instead of being written by hand         |
+| Forms        | React Hook Form + Zod                                                   | Shows the backend's `fieldErrors` next to the matching inputs                   |
+| Styling      | Tailwind CSS v4 + a few local primitives (Button, Field, Dialog, Toast) |                                                                                 |
+| Dates        | `date-fns` + `date-fns-tz`                                              | Converts slot times in the Owner's time zone to UTC `pickupAt`                  |
+| Tests        | Vitest + React Testing Library + MSW; Playwright for E2E                |                                                                                 |
+| Quality      | oxlint, Prettier, `tsc --noEmit`, GitHub Actions CI                     | oxlint ships with the Vite template and is much faster than ESLint              |
 
 ## Cross-cutting rules (apply to every sprint)
 
@@ -49,6 +49,7 @@ the catalogue, availability, orders, invoices and stats.
 ## Sprints
 
 ### Sprint 0: Project setup
+
 - **S0.1 Scaffold:** Vite React-TS template; strict tsconfig; `@/` path alias; folder layout (`app/`,
   `api/`, `features/<area>/`, `components/`, `lib/`); `.env.example`; README scripts updated to match.
 - **S0.2 Tooling and CI:** oxlint rules (react, typescript, jsx-a11y, import, vitest), Prettier, Vitest + RTL + MSW setup; GitHub Actions running lint,
@@ -59,6 +60,7 @@ the catalogue, availability, orders, invoices and stats.
   provider.
 
 ### Sprint 1: API layer
+
 - **S1.1 Generated types:** `npm run api:types` pulls `/v3/api-docs` and writes `src/api/schema.d.ts`,
   which is committed. CI checks that the file is up to date.
 - **S1.2 HTTP client:** base URL; `ApiError`; request id; 429 retry; `readPage()`; image URL helper.
@@ -66,6 +68,7 @@ the catalogue, availability, orders, invoices and stats.
   MSW handlers and fixtures mirroring the API.
 
 ### Sprint 2: Storefront catalogue and cart
+
 - **S2.1 Catalogue page:** category filter; item cards with thumbnails, price and lead time; loading,
   empty and error states.
 - **S2.2 Item detail:** image gallery; description; stock; add to cart.
@@ -73,6 +76,7 @@ the catalogue, availability, orders, invoices and stats.
   available; cart drawer.
 
 ### Sprint 3: Checkout and magic link
+
 - **S3.1 Pickup slot picker:** reads `/api/public/availability` for at most 62 days; calendar plus slot
   list; respects `bookable`, `remainingCapacity` and the cart's longest lead time.
 - **S3.2 Checkout form:** guest contact and notes; Zod validation; maps the server's `fieldErrors` onto
@@ -83,12 +87,14 @@ the catalogue, availability, orders, invoices and stats.
   "link expired or invalid" page.
 
 ### Sprint 4: Owner auth and profile
+
 - **S4.1 Login and session:** login page; access token in memory; single-flight refresh shared across tabs;
   logout; `RequireOwner` route guard; redirect back to the page the Owner was on.
 - **S4.2 Profile:** edit profile; IANA time-zone picker; change password; first-login prompt to change the
   bootstrap password.
 
 ### Sprint 5: Catalogue and availability management
+
 - **S5.1 Categories:** create, edit and delete.
 - **S5.2 Items:** paginated table; create and edit form (price, stock, lead time, category, availability).
 - **S5.3 Image upload:** client-side checks (type, 10 MB, dimensions); upload progress; delete images.
@@ -96,17 +102,20 @@ the catalogue, availability, orders, invoices and stats.
 - **S5.5 Blocked dates:** list, add and remove.
 
 ### Sprint 6: Order management
+
 - **S6.1 Orders list:** filter by status and date range; search; pagination; "pending" badge.
 - **S6.2 Order detail and transitions:** confirm, reject (with reason), start preparation, fulfil, cancel;
   reschedule using the slot picker; edit lines and notes while `PENDING`; 409 handling.
 
 ### Sprint 7: Invoices and dashboard
+
 - **S7.1 Invoices:** list and detail; apply a discount; mark paid (cash or bank transfer, with reference);
   refund; printable invoice view.
 - **S7.2 Dashboard home:** summary cards (today's pickups, pending count, monthly revenue).
 - **S7.3 Production list:** pick a day; aggregated item quantities; print stylesheet.
 
 ### Sprint 8: Hardening and release
+
 - **S8.1 E2E:** Playwright against the backend's Docker Compose stack in CI. Covers browse → checkout →
   magic link, then Owner login → confirm → mark paid.
 - **S8.2 Accessibility and responsive pass:** keyboard navigation; focus management; contrast; check at
@@ -117,4 +126,3 @@ the catalogue, availability, orders, invoices and stats.
 
 **Later (not scheduled):** email notifications in the UI, online payments, translations, offline support
 (PWA).
-
