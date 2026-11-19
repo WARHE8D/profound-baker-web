@@ -139,9 +139,9 @@ describe('availability', () => {
     expect(await day('2027-01-13')).toMatchObject({ open: false, reason: 'Bakery holiday' })
   })
 
-  test('slots earlier today are not bookable', async () => {
+  test('like the backend, bookable reflects capacity only, even for slots already past', async () => {
     const today = await day('2026-11-20')
-    expect(today.slots.find((s) => s.startTime === '11:30')?.bookable).toBe(false)
+    expect(today.slots.find((s) => s.startTime === '11:30')?.bookable).toBe(true)
     expect(today.slots.find((s) => s.startTime === '12:30')?.bookable).toBe(true)
   })
 
@@ -247,6 +247,12 @@ describe('checkout and the magic link', () => {
       unwrap(checkout({ pickupAt: slotToUtc(MONDAY, '10:10', FIXTURE_TIME_ZONE) })),
     )
     expect(offSlot.fieldError('pickupAt')).toBe('is not an open pickup slot')
+
+    // Still listed as bookable (capacity is free), but it started at 11:30 today, before NOW.
+    const past = await failure(
+      unwrap(checkout({ pickupAt: slotToUtc('2026-11-20', '11:30', FIXTURE_TIME_ZONE) })),
+    )
+    expect(past.fieldError('pickupAt')).toBe('must be in the future')
   })
 
   test('guests can cancel until 24 hours before pickup', async () => {

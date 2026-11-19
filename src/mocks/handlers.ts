@@ -155,6 +155,11 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       const leadHours = Math.max(
         ...body.lines.map((l) => items.find((i) => i.id === l.itemId)?.leadTimeHours ?? 0),
       )
+      if (Date.parse(body.pickupAt) <= store.now().getTime()) {
+        return apiError(request, 400, 'pickupAt must be in the future', [
+          { field: 'pickupAt', message: 'must be in the future' },
+        ])
+      }
       if (Date.parse(body.pickupAt) < store.now().getTime() + leadHours * 3_600_000) {
         return apiError(request, 400, `this order needs ${leadHours} hours' notice`, [
           { field: 'pickupAt', message: `must be at least ${leadHours} hours from now` },

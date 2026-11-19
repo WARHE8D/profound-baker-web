@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router'
 import { CartPage } from '@/features/cart/CartPage'
 import { CataloguePage } from '@/features/catalogue/CataloguePage'
+import { CheckoutPage } from '@/features/checkout/CheckoutPage'
 import { ItemPage } from '@/features/catalogue/ItemPage'
 import { OwnerLayout } from './layouts/OwnerLayout'
 import { ownerNav } from './layouts/owner-nav'
@@ -38,15 +39,7 @@ export const routes: RouteObject[] = [
           { index: true, Component: CataloguePage },
           { path: 'items/:itemId', Component: ItemPage },
           { path: 'cart', Component: CartPage },
-          // Checkout and the pickup slot picker arrive in Sprint 3 (#11, #12).
-          {
-            path: 'checkout',
-            element: (
-              <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-                <ComingSoonPage title="Checkout" sprint={3} />
-              </div>
-            ),
-          },
+          { path: 'checkout', Component: CheckoutPage },
           ...devRoutes,
           { path: '*', Component: NotFoundPage },
         ],
