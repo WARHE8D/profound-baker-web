@@ -9,7 +9,8 @@ import { catalogueItemsQuery, categoriesQuery } from './queries'
 
 const SKELETON_COUNT = 8
 
-const GRID = 'grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 sm:gap-6'
+// Two columns from phone width up: one card per screen made the menu a long scroll.
+const GRID = 'grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3 lg:grid-cols-4'
 
 /** Storefront home: every available item, filterable by category through `?category=<id>`. */
 export function CataloguePage() {
