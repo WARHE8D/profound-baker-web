@@ -14,3 +14,21 @@ afterEach(() => {
 })
 
 afterAll(() => server.close())
+
+// jsdom has no <dialog> behaviour. Enough of it for our Dialog: open/close toggle the `open`
+// attribute and close() fires "close". Esc is simulated in tests by dispatching "cancel".
+function openDialog(this: HTMLDialogElement) {
+  this.setAttribute('open', '')
+}
+
+function closeDialog(this: HTMLDialogElement) {
+  if (!this.hasAttribute('open')) return
+  this.removeAttribute('open')
+  this.dispatchEvent(new Event('close'))
+}
+
+if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+  HTMLDialogElement.prototype.showModal = openDialog
+  HTMLDialogElement.prototype.show = openDialog
+  HTMLDialogElement.prototype.close = closeDialog
+}

@@ -1,0 +1,104 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/fraunces';
+
+/*
+ * Theme tokens. Raw values live in CSS variables so light and dark mode can swap them; @theme inline
+ * turns them into Tailwind utilities (bg-surface, text-muted, border-border, ring-ring, …).
+ * Text colours on their backgrounds meet WCAG AA (4.5:1) in both modes.
+ */
+:root {
+  color-scheme: light;
+
+  --bg: #fdf8f3; /* cream */
+  --surface: #ffffff;
+  --surface-muted: #f6ede3;
+  --border: #e4d3c2;
+  --text: #2b1d14; /* cocoa */
+  --text-muted: #6b5546;
+
+  --primary: #9a4a12; /* caramel crust */
+  --primary-hover: #7f3c0e;
+  --primary-fg: #ffffff;
+
+  --danger: #b42318;
+  --danger-hover: #912018;
+  --danger-fg: #ffffff;
+  --success: #2f7a3e;
+  --warning: #9a5a00;
+
+  --ring: #c2621a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #1a130e;
+    --surface: #241a13;
+    --surface-muted: #2e2219;
+    --border: #45352a;
+    --text: #f6ece2;
+    --text-muted: #c4ae9b;
+
+    --primary: #f0a35e;
+    --primary-hover: #f5b77e;
+    --primary-fg: #2b1d14;
+
+    --danger: #f97066;
+    --danger-hover: #fb8f87;
+    --danger-fg: #2b1d14;
+    --success: #6fcf86;
+    --warning: #f5b84a;
+
+    --ring: #f0a35e;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-fg: var(--danger-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --color-ring: var(--ring);
+}
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Fraunces Variable', ui-serif, Georgia, serif;
+
+  --radius-control: 0.625rem;
+  --radius-card: 1rem;
+
+  --shadow-card: 0 1px 2px rgb(43 29 20 / 0.06), 0 4px 16px rgb(43 29 20 / 0.06);
+}
+
+@layer base {
+  html {
+    @apply bg-bg font-sans text-text antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+
+  /* One visible focus style for every interactive element, keyboard only. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
