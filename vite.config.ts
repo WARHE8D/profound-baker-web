@@ -1,12 +1,32 @@
 /// <reference types="vitest/config" />
+import { rmSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
+
+/**
+ * public/mockServiceWorker.js serves `npm run dev:mock`. Production builds never register it, so
+ * leave it out of dist instead of publishing an unused service worker.
+ */
+function dropMockServiceWorker(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'drop-mock-service-worker',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    closeBundle() {
+      rmSync(resolve(outDir, 'mockServiceWorker.js'), { force: true })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), dropMockServiceWorker()],
   resolve: {
     // Keep in sync with "paths" in tsconfig.app.json
     alias: {
@@ -22,7 +42,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/test/**', 'src/**/*.test.{ts,tsx}', 'src/main.tsx'],
+      exclude: ['src/test/**', 'src/**/*.test.{ts,tsx}', 'src/main.tsx', 'src/mocks/browser.ts'],
     },
   },
 })

@@ -8,7 +8,7 @@
   "env": {
     "browser": true
   },
-  "ignorePatterns": ["dist", "coverage", "src/api/schema.d.ts"],
+  "ignorePatterns": ["dist", "coverage", "src/api/schema.d.ts", "public/mockServiceWorker.js"],
   "rules": {
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",

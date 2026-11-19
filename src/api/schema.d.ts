@@ -628,6 +628,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/bakery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["bakery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/public/catalogue/categories": {
         parameters: {
             query?: never;
@@ -995,22 +1011,15 @@ export interface components {
             ownerName: string;
             businessName: string;
         };
-        Pageable: {
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            sort?: string[];
-        };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
+            paged?: boolean;
             sort?: components["schemas"]["SortObject"];
             /** Format: int32 */
-            pageSize?: number;
-            /** Format: int32 */
             pageNumber?: number;
-            paged?: boolean;
+            /** Format: int32 */
+            pageSize?: number;
             unpaged?: boolean;
         };
         PageInvoiceResponse: {
@@ -1108,6 +1117,13 @@ export interface components {
             orderCount: number;
             items: components["schemas"]["ProductionItemResponse"][];
         };
+        PublicBakeryResponse: {
+            businessName: string;
+            timeZone: string;
+            logoUrl: string | null;
+            phone: string | null;
+            address: components["schemas"]["AddressDto"] | null;
+        };
         PublicItemResponse: {
             /** Format: uuid */
             id: string;
@@ -1146,6 +1162,10 @@ export interface components {
         TimeSlotResponse: {
             startTime: string;
             endTime: string;
+            /** Format: date-time */
+            startsAt: string;
+            /** Format: date-time */
+            endsAt: string;
             /** Format: int32 */
             capacity: number;
             /** Format: int32 */
@@ -1300,7 +1320,11 @@ export interface operations {
     };
     logout: {
         parameters: {
-            query?: never;
+            query?: {
+                tokenValue?: string;
+                issuedAt?: string;
+                expiresAt?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1367,7 +1391,11 @@ export interface operations {
     };
     me: {
         parameters: {
-            query?: never;
+            query?: {
+                tokenValue?: string;
+                issuedAt?: string;
+                expiresAt?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1381,6 +1409,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnerResponse"];
+                };
+            };
+            /** @description Invalid input: validation (`fieldErrors` lists the fields), a malformed value, or a business rule */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             /** @description No valid access token, or bad credentials */
@@ -2215,11 +2252,16 @@ export interface operations {
     };
     search: {
         parameters: {
-            query: {
+            query?: {
                 categoryId?: string;
                 available?: boolean;
                 search?: string;
-                pageable: components["schemas"]["Pageable"];
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
             };
             header?: never;
             path?: never;
@@ -3163,12 +3205,17 @@ export interface operations {
     };
     list_2: {
         parameters: {
-            query: {
+            query?: {
                 from?: string;
                 to?: string;
                 status?: ("PENDING" | "PAID" | "REFUNDED" | "VOID")[];
                 q?: string;
-                pageable: components["schemas"]["Pageable"];
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
             };
             header?: never;
             path?: never;
@@ -3528,12 +3575,17 @@ export interface operations {
     };
     calendar: {
         parameters: {
-            query: {
+            query?: {
                 from?: string;
                 to?: string;
                 status?: ("PENDING" | "CONFIRMED" | "IN_PROGRESS" | "FULFILLED" | "REJECTED" | "CANCELLED")[];
                 q?: string;
-                pageable: components["schemas"]["Pageable"];
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
             };
             header?: never;
             path?: never;
@@ -4352,7 +4404,11 @@ export interface operations {
     };
     changePassword: {
         parameters: {
-            query?: never;
+            query?: {
+                tokenValue?: string;
+                issuedAt?: string;
+                expiresAt?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4419,7 +4475,11 @@ export interface operations {
     };
     profile: {
         parameters: {
-            query?: never;
+            query?: {
+                tokenValue?: string;
+                issuedAt?: string;
+                expiresAt?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4433,6 +4493,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnerProfileResponse"];
+                };
+            };
+            /** @description Invalid input: validation (`fieldErrors` lists the fields), a malformed value, or a business rule */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             /** @description No valid access token, or bad credentials */
@@ -4466,7 +4535,11 @@ export interface operations {
     };
     updateProfile: {
         parameters: {
-            query?: never;
+            query?: {
+                tokenValue?: string;
+                issuedAt?: string;
+                expiresAt?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4575,6 +4648,35 @@ export interface operations {
             };
         };
     };
+    bakery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBakeryResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     categories: {
         parameters: {
             query?: never;
@@ -4606,10 +4708,15 @@ export interface operations {
     };
     items: {
         parameters: {
-            query: {
+            query?: {
                 categoryId?: string;
                 search?: string;
-                pageable: components["schemas"]["Pageable"];
+                /** @description Zero-based page index (0..N) */
+                page?: number;
+                /** @description The size of the page to be returned */
+                size?: number;
+                /** @description Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported. */
+                sort?: string[];
             };
             header?: never;
             path?: never;

@@ -15,17 +15,17 @@ the catalogue, availability, orders, invoices and stats.
 
 ## Tech stack
 
-| Concern      | Choice                                                                  | Why                                                                             |
-| ------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Build        | Vite + React 19 + TypeScript (strict)                                   | The backend's dev CORS already allows `localhost:5173`                          |
-| Routing      | React Router (data router)                                              | Separate public and owner route trees, with an auth guard on the owner tree     |
-| Server state | TanStack Query                                                          | Caching and invalidation after mutations, with retry rules for 401, 409 and 429 |
-| API types    | `openapi-typescript` generated from `/v3/api-docs` + `openapi-fetch`    | Types come from the backend's contract instead of being written by hand         |
-| Forms        | React Hook Form + Zod                                                   | Shows the backend's `fieldErrors` next to the matching inputs                   |
-| Styling      | Tailwind CSS v4 + a few local primitives (Button, Field, Dialog, Toast) |                                                                                 |
-| Dates        | `date-fns` + `date-fns-tz`                                              | Converts slot times in the Owner's time zone to UTC `pickupAt`                  |
-| Tests        | Vitest + React Testing Library + MSW; Playwright for E2E                |                                                                                 |
-| Quality      | oxlint, Prettier, `tsc --noEmit`, GitHub Actions CI                     | oxlint ships with the Vite template and is much faster than ESLint              |
+| Concern      | Choice                                                                  | Why                                                                                                            |
+| ------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Build        | Vite + React 19 + TypeScript (strict)                                   | The backend's dev CORS already allows `localhost:5173`                                                         |
+| Routing      | React Router (data router)                                              | Separate public and owner route trees, with an auth guard on the owner tree                                    |
+| Server state | TanStack Query                                                          | Caching and invalidation after mutations, with retry rules for 401, 409 and 429                                |
+| API types    | `openapi-typescript` generated from `/v3/api-docs` + `openapi-fetch`    | Types come from the backend's contract instead of being written by hand                                        |
+| Forms        | React Hook Form + Zod                                                   | Shows the backend's `fieldErrors` next to the matching inputs                                                  |
+| Styling      | Tailwind CSS v4 + a few local primitives (Button, Field, Dialog, Toast) |                                                                                                                |
+| Dates        | Native `Intl` (`src/lib/time.ts`)                                       | Converts slot times in the Owner's zone to UTC `pickupAt` with the backend's DST rules; no date library needed |
+| Tests        | Vitest + React Testing Library + MSW; Playwright for E2E                |                                                                                                                |
+| Quality      | oxlint, Prettier, `tsc --noEmit`, GitHub Actions CI                     | oxlint ships with the Vite template and is much faster than ESLint                                             |
 
 ## Cross-cutting rules (apply to every sprint)
 

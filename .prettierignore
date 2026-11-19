@@ -4,3 +4,4 @@ package-lock.json
 # Generated (npm run api:types)
 openapi/openapi.json
 src/api/schema.d.ts
+public/mockServiceWorker.js

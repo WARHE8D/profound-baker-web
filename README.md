@@ -76,6 +76,8 @@ in the bottom-left corner.
 | Variable            | Example                 | Purpose                                                                              |
 | ------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
 | `VITE_API_BASE_URL` | `http://localhost:8080` | Origin of the profound-baker-server API. Item image URLs are relative to it as well. |
+| `VITE_CURRENCY`     | `CAD`                   | ISO 4217 currency for prices. The API sends plain numbers. Default `CAD`.            |
+| `VITE_LOCALE`       | `en-US`                 | Locale for number and date formatting. Default `en-US`.                              |
 
 Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets in them**.
 
@@ -84,6 +86,7 @@ Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets i
 | Command                           | What it does                                          |
 | --------------------------------- | ----------------------------------------------------- |
 | `npm run dev`                     | Start the dev server with hot reload on port 5173     |
+| `npm run dev:mock`                | Same, with the API mocked: no backend needed          |
 | `npm run build`                   | Type-check, then build for production into `dist/`    |
 | `npm run preview`                 | Serve the production build locally                    |
 | `npm run typecheck`               | Type-check only                                       |
@@ -140,9 +143,40 @@ const src = apiUrl(item.thumbnailUrls[0]) // makes /uploads/... absolute
 
 ### Tests and API mocks
 
-Tests live next to the code as `*.test.ts(x)`. API calls are mocked with [MSW](https://mswjs.io):
-shared handlers are in `src/test/msw/handlers.ts`, and a single test can override them with
-`server.use(...)`. Any request without a handler fails the test, so tests never reach a real server.
+Tests live next to the code as `*.test.ts(x)`. API calls are mocked with [MSW](https://mswjs.io).
+The handlers in `src/mocks/` mirror profound-baker-server: the same paths, JSON shapes and
+`ApiError` responses. Their fixture data is typed from the API spec. A single test can override
+them with `server.use(...)`. Any request without a handler fails the test, so tests never reach a
+real server.
+
+- `src/mocks/fixtures.ts` has the categories, items (one sold out, one hidden), opening hours,
+  closures and the Owner's profile. The fixtures' bakery is in `America/New_York`, so daylight saving
+  gets exercised.
+- `src/mocks/store.ts` keeps orders placed through checkout, so a flow can check out, open the
+  magic link and cancel. Tests can freeze its clock with `mockStore.setNow(date)`. It resets after
+  every test.
+
+### Mocked dev mode
+
+`npm run dev:mock` runs the app with MSW's service worker answering every API call from those
+fixtures, so you can build pages without the backend. Sign in as `owner@sugarcrumbs.test` with the
+password `sugarcrumbs-dev`; these work only against the mocks. The worker file
+(`public/mockServiceWorker.js`) is left out of production builds.
+
+### Money and time
+
+- **Money:** `formatMoney()` in `src/lib/money.ts` uses `VITE_CURRENCY` and `VITE_LOCALE`.
+  `sumMoney()` and `lineTotal()` add prices without floating-point drift. The server's totals stay
+  authoritative.
+- **Times:** `src/lib/time.ts` works in the Owner's time zone using only `Intl`. Guests get that
+  zone from `GET /api/public/bakery`.
+  - **Checkout:** send the chosen slot's `startsAt` as `pickupAt`. The server computed that instant,
+    so the app never converts zones itself.
+  - `formatLocal(instant, zone)` shows an instant such as `pickupAt` in the bakery's zone.
+  - `slotToUtc(date, time, zone)` does the same conversion client-side, for local times that come
+    without an instant. On daylight-saving change days it follows the backend's rules: a skipped time
+    moves later, and a repeated time takes the earlier instant.
+  - `todayIn(zone)` gives the bakery's date.
 
 ## Working with the API
 
