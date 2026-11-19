@@ -29,3 +29,6 @@ dist-ssr
 # Claude Code per-user settings
 .claude/settings.local.json
 .claude/*.tmp.*
+
+# Test coverage reports
+coverage
