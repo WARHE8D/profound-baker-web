@@ -89,3 +89,37 @@ test('keeps working when storage throws', () => {
   store.add(sourdough, 1)
   expect(store.getLines()).toHaveLength(1)
 })
+
+test('setQuantity clamps, remove drops a line, and both ignore unknown items', () => {
+  const store = createCartStore()
+  store.add(sourdough, 2)
+  store.add(baguette, 1)
+
+  store.setQuantity(sourdough.id, 7)
+  store.setQuantity(baguette.id, 0)
+  expect(store.getLines().map((l) => l.quantity)).toEqual([7, 1])
+  store.setQuantity(sourdough.id, 1000)
+  expect(store.getLines()[0]?.quantity).toBe(MAX_QUANTITY_PER_ITEM)
+
+  store.remove(sourdough.id)
+  expect(store.getLines().map((l) => l.itemId)).toEqual([baguette.id])
+
+  const before = store.getLines()
+  store.setQuantity('nope', 3)
+  store.remove('nope')
+  expect(store.getLines()).toBe(before) // no write, no re-render
+})
+
+test('refresh takes the current name, price and thumbnail and keeps the quantity', () => {
+  const store = createCartStore()
+  store.add(sourdough, 3)
+
+  store.refresh({ ...sourdough, name: 'Sourdough', price: 9, thumbnailUrls: [] })
+
+  expect(store.getLines()).toEqual([
+    { itemId: sourdough.id, name: 'Sourdough', price: 9, thumbnailUrl: null, quantity: 3 },
+  ])
+  const before = store.getLines()
+  store.refresh({ ...sourdough, name: 'Sourdough', price: 9, thumbnailUrls: [] })
+  expect(store.getLines()).toBe(before)
+})

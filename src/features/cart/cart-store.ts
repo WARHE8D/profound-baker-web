@@ -83,7 +83,47 @@ export function createCartStore(storage: () => Storage | undefined = defaultStor
       return after - before
     },
 
+    /** Sets a line's quantity, clamped to 1…{@link MAX_QUANTITY_PER_ITEM}. */
+    setQuantity(itemId: string, quantity: number) {
+      const current = read()
+      if (!current.some((line) => line.itemId === itemId)) return
+      write(
+        current.map((line) =>
+          line.itemId === itemId ? { ...line, quantity: clampQuantity(quantity) } : line,
+        ),
+      )
+    },
+
+    remove(itemId: string) {
+      const current = read()
+      if (!current.some((line) => line.itemId === itemId)) return
+      write(current.filter((line) => line.itemId !== itemId))
+    },
+
+    /**
+     * Takes the item's current name, price and thumbnail into its line, e.g. once the guest has
+     * seen a price change. Does nothing if the item isn't in the cart or nothing changed.
+     */
+    refresh(item: Schema<'PublicItemResponse'>) {
+      const current = read()
+      const thumbnailUrl = item.thumbnailUrls[0] ?? null
+      const stale = current.find(
+        (line) =>
+          line.itemId === item.id &&
+          (line.name !== item.name ||
+            line.price !== item.price ||
+            line.thumbnailUrl !== thumbnailUrl),
+      )
+      if (!stale) return
+      write(
+        current.map((line) =>
+          line === stale ? { ...line, name: item.name, price: item.price, thumbnailUrl } : line,
+        ),
+      )
+    },
+
     clear() {
+      if (read().length === 0) return
       write([])
     },
   }

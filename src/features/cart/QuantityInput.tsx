@@ -6,7 +6,7 @@ import { clampQuantity, MAX_QUANTITY_PER_ITEM } from './cart-store'
 type QuantityInputProps = {
   value: number
   onChange: (quantity: number) => void
-  /** Accessible name, e.g. "Quantity". */
+  /** Accessible name, e.g. "Quantity" or "Quantity of Baguette"; the buttons reuse it. */
   label: string
   max?: number
   disabled?: boolean
@@ -55,7 +55,7 @@ export function QuantityInput({
         className={step}
         onClick={() => onChange(clamp(value - 1))}
         disabled={disabled || value <= 1}
-        aria-label="Decrease quantity"
+        aria-label={`Decrease ${lowerFirst(label)}`}
       >
         <Minus aria-hidden="true" className="size-4" />
       </button>
@@ -79,10 +79,12 @@ export function QuantityInput({
         className={step}
         onClick={() => onChange(clamp(value + 1))}
         disabled={disabled || value >= max}
-        aria-label="Increase quantity"
+        aria-label={`Increase ${lowerFirst(label)}`}
       >
         <Plus aria-hidden="true" className="size-4" />
       </button>
     </div>
   )
 }
+
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1)

@@ -3,7 +3,7 @@ import { ChevronRight, Clock, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { isApiError, type Schema } from '@/api'
-import { Badge, Button, EmptyState, ErrorState, useToast } from '@/components'
+import { Badge, Button, ButtonLink, EmptyState, ErrorState, useToast } from '@/components'
 import { cartStore, MAX_QUANTITY_PER_ITEM, useCartLines } from '@/features/cart/cart-store'
 import { QuantityInput } from '@/features/cart/QuantityInput'
 import { formatMoney } from '@/lib/money'
@@ -166,14 +166,7 @@ function ItemNotFound() {
       icon="🧁"
       title="We couldn't find that item"
       description="It may have sold out for the season or been taken off the menu."
-      action={
-        <Link
-          to="/"
-          className="inline-flex h-10 items-center rounded-control bg-primary px-4 text-sm font-medium text-primary-fg hover:bg-primary-hover"
-        >
-          Back to the menu
-        </Link>
-      }
+      action={<ButtonLink to="/">Back to the menu</ButtonLink>}
     />
   )
 }
