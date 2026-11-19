@@ -16,7 +16,7 @@ week and has its own milestone. The rules in "Cross-cutting rules" in PLAN.md ap
 - [ ] Update the README's Getting started and Scripts sections to match the real scripts
 
 ## [S0.2] Tooling and CI
-- [ ] ESLint (typescript-eslint, react-hooks, jsx-a11y) and Prettier
+- [ ] oxlint (from the S0.1 scaffold): enable the `react`, `typescript`, `jsx-a11y`, `import` and `vitest` plugins and treat warnings as errors in CI; Prettier
 - [ ] Vitest + React Testing Library + jsdom; MSW for API mocks in tests
 - [ ] Scripts: `lint`, `typecheck`, `test`, `build`
 - [ ] GitHub Actions: lint, typecheck, test and build on every push and PR; cache npm

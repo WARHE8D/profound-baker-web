@@ -25,7 +25,7 @@ the catalogue, availability, orders, invoices and stats.
 | Styling | Tailwind CSS v4 + a few local primitives (Button, Field, Dialog, Toast) | |
 | Dates | `date-fns` + `date-fns-tz` | Converts slot times in the Owner's time zone to UTC `pickupAt` |
 | Tests | Vitest + React Testing Library + MSW; Playwright for E2E | |
-| Quality | ESLint, Prettier, `tsc --noEmit`, GitHub Actions CI | |
+| Quality | oxlint, Prettier, `tsc --noEmit`, GitHub Actions CI | oxlint ships with the Vite template and is much faster than ESLint |
 
 ## Cross-cutting rules (apply to every sprint)
 
@@ -51,7 +51,7 @@ the catalogue, availability, orders, invoices and stats.
 ### Sprint 0: Project setup
 - **S0.1 Scaffold:** Vite React-TS template; strict tsconfig; `@/` path alias; folder layout (`app/`,
   `api/`, `features/<area>/`, `components/`, `lib/`); `.env.example`; README scripts updated to match.
-- **S0.2 Tooling and CI:** ESLint, Prettier, Vitest + RTL + MSW setup; GitHub Actions running lint,
+- **S0.2 Tooling and CI:** oxlint rules (react, typescript, jsx-a11y, import, vitest), Prettier, Vitest + RTL + MSW setup; GitHub Actions running lint,
   typecheck, test and build on every push and PR.
 - **S0.3 Tailwind and UI primitives:** theme tokens (bakery palette, typography); Button, Input, Field
   (with error slot), Select, Dialog, Toast, Spinner, EmptyState.
