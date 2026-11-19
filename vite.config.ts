@@ -16,6 +16,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // .env.local is not loaded in test mode; give the API client a fixed origin for MSW handlers.
+    env: { VITE_API_BASE_URL: 'http://localhost:8080' },
     restoreMocks: true,
     coverage: {
       provider: 'v8',

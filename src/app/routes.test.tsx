@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { RouteObject } from 'react-router'
 import { expect, test, vi } from 'vitest'
+import { ApiError } from '@/api'
 import { renderRoute } from '@/test/render'
 import { PublicLayout } from './layouts/PublicLayout'
 import { RouteErrorBoundary } from './pages/RouteErrorBoundary'
@@ -101,4 +102,58 @@ test('a page that crashes shows the error inside the layout, keeping the navigat
   expect(within(alert).getByText('Kaboom')).toBeInTheDocument()
   expect(within(alert).getByRole('button', { name: 'Reload page' })).toBeInTheDocument()
   expect(screen.getByRole('banner')).toBeInTheDocument()
+})
+
+function FailingApiCall(): never {
+  throw new ApiError({ status: 500, message: 'The server had a problem.', requestId: 'req-500' })
+}
+
+function MissingApiResource(): never {
+  throw new ApiError({ status: 404, message: 'item not found' })
+}
+
+test('an API error shows its message and request id', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const routes: RouteObject[] = [
+    {
+      path: '/',
+      Component: PublicLayout,
+      ErrorBoundary: RouteErrorBoundary,
+      children: [
+        {
+          ErrorBoundary: RouteErrorBoundary,
+          children: [{ index: true, Component: FailingApiCall }],
+        },
+      ],
+    },
+  ]
+
+  renderRoute('/', { routes })
+
+  const alert = await screen.findByRole('alert')
+  expect(within(alert).getByText('The server had a problem.')).toBeInTheDocument()
+  expect(within(alert).getByText('req-500')).toBeInTheDocument()
+})
+
+test('an API 404 shows the not-found page', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const routes: RouteObject[] = [
+    {
+      path: '/',
+      Component: PublicLayout,
+      ErrorBoundary: RouteErrorBoundary,
+      children: [
+        {
+          ErrorBoundary: RouteErrorBoundary,
+          children: [{ index: true, Component: MissingApiResource }],
+        },
+      ],
+    },
+  ]
+
+  renderRoute('/', { routes })
+
+  expect(
+    await screen.findByRole('heading', { name: "We couldn't find that page" }),
+  ).toBeInTheDocument()
 })
