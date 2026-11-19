@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
+import { mockStore } from './msw/handlers'
 import { server } from './msw/server'
 
 // Any request without a handler fails the test, so tests never hit a real API by accident.
@@ -9,8 +10,9 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 
 afterEach(() => {
   cleanup()
-  // Drop handlers added with server.use() in a single test.
+  // Drop handlers added with server.use() in a single test, and orders placed through the mocks.
   server.resetHandlers()
+  mockStore.reset()
 })
 
 afterAll(() => server.close())
