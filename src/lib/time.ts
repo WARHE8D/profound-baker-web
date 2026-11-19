@@ -4,8 +4,10 @@
 //   - instants: `pickupAt`, `createdAt`, … ISO strings in UTC ("2026-11-21T10:00:00Z")
 //   - local times in the Owner's time zone: availability `date` ("2026-11-21") and slot `startTime`
 //     ("10:00" or "10:00:00")
-// Show instants with formatLocal(instant, zone); turn a chosen slot into `pickupAt` with
-// slotToUtc(date, time, zone). Both take the IANA zone, e.g. "Asia/Karachi".
+// The zone comes from GET /api/public/bakery (`timeZone`). Show instants with
+// formatLocal(instant, zone). For checkout, send the chosen slot's own `startsAt` as `pickupAt`:
+// the server computed it. slotToUtc(date, time, zone) is the same conversion done client-side, for
+// local times that come without an instant.
 
 const MINUTE = 60_000
 const HALF_DAY = 12 * 60 * MINUTE

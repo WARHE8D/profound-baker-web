@@ -6,10 +6,6 @@ import { slotToUtc } from '@/lib/time'
 import { mockStore } from '@/test/msw/handlers'
 import { FIXTURE_OWNER_CREDENTIALS, FIXTURE_TIME_ZONE, ids } from './fixtures'
 
-// `query: {…} as never` on list endpoints: the spec marks a `pageable` object parameter as required,
-// but the backend reads flat page/size/sort params. Remove the casts once the backend annotates
-// Pageable with @ParameterObject (see the backend issue).
-
 // Friday 20 Nov 2026, 12:00 in New York.
 const NOW = new Date('2026-11-20T17:00:00Z')
 const MONDAY = '2026-11-23'
@@ -49,6 +45,12 @@ afterEach(() => {
   setAccessTokenProvider(null)
 })
 
+test('the public bakery endpoint gives guests the time zone and contact details', async () => {
+  const bakery = await unwrap(api.GET('/api/public/bakery'))
+  expect(bakery).toMatchObject({ businessName: 'SugarCrumbs', timeZone: FIXTURE_TIME_ZONE })
+  expect(bakery.address?.city).toBe('Brooklyn')
+})
+
 describe('catalogue', () => {
   test('lists categories', async () => {
     const categories = await unwrap(api.GET('/api/public/catalogue/categories'))
@@ -56,9 +58,7 @@ describe('catalogue', () => {
   })
 
   test('lists available items only, sorted by name, as a Spring page', async () => {
-    const page = readPage(
-      await unwrap(api.GET('/api/public/catalogue/items', { params: { query: {} as never } })),
-    )
+    const page = readPage(await unwrap(api.GET('/api/public/catalogue/items')))
     expect(page.items.map((i) => i.name)).toEqual([
       'Baguette',
       'Butter croissant',
@@ -70,16 +70,32 @@ describe('catalogue', () => {
     expect(page.items.find((i) => i.name === 'Cinnamon roll')?.orderable).toBe(false)
   })
 
+  test('pages with flat page and size parameters', async () => {
+    const second = readPage(
+      await unwrap(
+        api.GET('/api/public/catalogue/items', { params: { query: { page: 1, size: 2 } } }),
+      ),
+    )
+    expect(second.items.map((i) => i.name)).toEqual(['Chocolate fudge cake', 'Cinnamon roll'])
+    expect(second).toMatchObject({
+      number: 1,
+      size: 2,
+      totalPages: 3,
+      hasPrevious: true,
+      hasNext: true,
+    })
+  })
+
   test('filters by category and search', async () => {
     const byCategory = await unwrap(
       api.GET('/api/public/catalogue/items', {
-        params: { query: { categoryId: ids.categories.cakes } as never },
+        params: { query: { categoryId: ids.categories.cakes } },
       }),
     )
     expect(readPage(byCategory).items.map((i) => i.name)).toEqual(['Chocolate fudge cake'])
 
     const bySearch = await unwrap(
-      api.GET('/api/public/catalogue/items', { params: { query: { search: 'BREAD' } as never } }),
+      api.GET('/api/public/catalogue/items', { params: { query: { search: 'BREAD' } } }),
     )
     expect(readPage(bySearch).items).toEqual([])
   })
@@ -106,6 +122,8 @@ describe('availability', () => {
     expect(monday.slots[0]).toEqual({
       startTime: '08:00',
       endTime: '08:30',
+      startsAt: '2026-11-23T13:00:00Z',
+      endsAt: '2026-11-23T13:30:00Z',
       capacity: 2,
       remainingCapacity: 2,
       bookable: true,
@@ -170,6 +188,18 @@ describe('checkout and the magic link', () => {
       pickupAt: '2026-11-23T15:00:00Z',
       cancellableUntil: '2026-11-22T15:00:00.000Z',
     })
+  })
+
+  test('the storefront sends a slot’s startsAt as pickupAt, with no zone conversion', async () => {
+    const [monday] = await unwrap(
+      api.GET('/api/public/availability', { params: { query: { date: MONDAY } } }),
+    )
+    const slot = monday!.slots.find((s) => s.startTime === '14:30')!
+
+    const order = await unwrap(checkout({ pickupAt: slot.startsAt }))
+
+    expect(order.pickupAt).toBe('2026-11-23T19:30:00Z')
+    expect(slot.startsAt).toBe(slotToUtc(MONDAY, '14:30', FIXTURE_TIME_ZONE))
   })
 
   test('each order uses one place in its slot; a full slot is a 409', async () => {
@@ -270,9 +300,7 @@ describe('owner auth and owner endpoints', () => {
     expect(await unwrap(api.GET('/api/owner/profile'))).toMatchObject({
       timeZone: FIXTURE_TIME_ZONE,
     })
-    const orders = readPage(
-      await unwrap(api.GET('/api/orders', { params: { query: {} as never } })),
-    )
+    const orders = readPage(await unwrap(api.GET('/api/orders')))
     expect(orders.items).toHaveLength(1)
     expect(orders.items[0]).not.toHaveProperty('accessToken')
   })

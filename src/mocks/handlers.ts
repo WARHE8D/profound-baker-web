@@ -80,6 +80,18 @@ export function createHandlers(store: MockStore): HttpHandler[] {
   }
 
   return [
+    // ---- The bakery (public): name, time zone and contact for the storefront ----
+    http.get(api('/api/public/bakery'), () => {
+      const bakery: Schema<'PublicBakeryResponse'> = {
+        businessName: ownerProfile.businessName,
+        timeZone: ownerProfile.timeZone,
+        logoUrl: ownerProfile.logoUrl,
+        phone: ownerProfile.phone,
+        address: ownerProfile.address,
+      }
+      return HttpResponse.json(bakery)
+    }),
+
     // ---- Catalogue (public) ----
     http.get(api('/api/public/catalogue/categories'), () => HttpResponse.json(categories)),
 

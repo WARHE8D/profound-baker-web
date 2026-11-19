@@ -168,11 +168,14 @@ password `sugarcrumbs-dev`; these work only against the mocks. The worker file
 - **Money:** `formatMoney()` in `src/lib/money.ts` uses `VITE_CURRENCY` and `VITE_LOCALE`.
   `sumMoney()` and `lineTotal()` add prices without floating-point drift. The server's totals stay
   authoritative.
-- **Times:** `src/lib/time.ts` works in the Owner's time zone using only `Intl`:
-  - `formatLocal(instant, zone)` shows an instant such as `pickupAt` in that zone.
-  - `slotToUtc(date, time, zone)` turns a slot into the UTC `pickupAt` that checkout sends. On
-    daylight-saving change days it follows the backend's rules: a skipped time moves later, and a
-    repeated time takes the earlier instant.
+- **Times:** `src/lib/time.ts` works in the Owner's time zone using only `Intl`. Guests get that
+  zone from `GET /api/public/bakery`.
+  - **Checkout:** send the chosen slot's `startsAt` as `pickupAt`. The server computed that instant,
+    so the app never converts zones itself.
+  - `formatLocal(instant, zone)` shows an instant such as `pickupAt` in the bakery's zone.
+  - `slotToUtc(date, time, zone)` does the same conversion client-side, for local times that come
+    without an instant. On daylight-saving change days it follows the backend's rules: a skipped time
+    moves later, and a repeated time takes the earlier instant.
   - `todayIn(zone)` gives the bakery's date.
 
 ## Working with the API

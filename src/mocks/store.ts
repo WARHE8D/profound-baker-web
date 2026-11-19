@@ -66,17 +66,22 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       minutes += hours.slotDurationMinutes
     ) {
       const startTime = hhmm(minutes)
-      const pickupAt = slotToUtc(date, startTime, FIXTURE_TIME_ZONE)
+      const endTime = hhmm(minutes + hours.slotDurationMinutes)
+      // The slot's instants, as the backend now sends them; checkout sends startsAt as pickupAt.
+      const startsAt = slotToUtc(date, startTime, FIXTURE_TIME_ZONE)
+      const endsAt = slotToUtc(date, endTime, FIXTURE_TIME_ZONE)
       const booked = orders.filter(
-        (o) => o.pickupAt === pickupAt && ACTIVE.includes(o.status),
+        (o) => o.pickupAt === startsAt && ACTIVE.includes(o.status),
       ).length
       const remainingCapacity = Math.max(0, hours.maxConcurrentBookings - booked)
       slots.push({
         startTime,
-        endTime: hhmm(minutes + hours.slotDurationMinutes),
+        endTime,
+        startsAt,
+        endsAt,
         capacity: hours.maxConcurrentBookings,
         remainingCapacity,
-        bookable: remainingCapacity > 0 && Date.parse(pickupAt) > nowMs,
+        bookable: remainingCapacity > 0 && Date.parse(startsAt) > nowMs,
       })
     }
     return { date, open: true, reason: null, slots }
@@ -97,9 +102,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     /** The slot `pickupAt` falls on, if any. */
     findSlot(pickupAt: string) {
       const date = todayIn(FIXTURE_TIME_ZONE, new Date(pickupAt))
-      return dayAvailability(date).slots.find(
-        (s) => slotToUtc(date, s.startTime, FIXTURE_TIME_ZONE) === pickupAt,
-      )
+      return dayAvailability(date).slots.find((s) => s.startsAt === pickupAt)
     },
 
     placeOrder(request: Schema<'CheckoutRequest'>): StoredOrder {
