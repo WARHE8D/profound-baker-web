@@ -20,6 +20,13 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
     ]
   : []
 
+/** Owner pages that exist, by their path under /owner; the rest of the nav shows "coming soon". */
+const ownerPages: Record<string, RouteObject['lazy']> = {
+  profile: async () => ({
+    Component: (await import('@/features/profile/ProfilePage')).ProfilePage,
+  }),
+}
+
 /**
  * Two trees, each with its own layout:
  *   /        storefront (public)
@@ -85,6 +92,8 @@ export const routes: RouteObject[] = [
         ErrorBoundary: RouteErrorBoundary,
         children: [
           ...ownerNav.map(({ path, label, sprint }): RouteObject => {
+            const built = ownerPages[path]
+            if (built) return { path, lazy: built }
             const element = <ComingSoonPage title={label} sprint={sprint} />
             return path === '' ? { index: true, element } : { path, element }
           }),

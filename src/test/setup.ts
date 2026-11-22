@@ -42,5 +42,7 @@ if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
   HTMLDialogElement.prototype.close = closeDialog
 }
 
-// jsdom has no scrolling; React Router's <ScrollRestoration> calls window.scrollTo on navigation.
+// jsdom has no scrolling: React Router's <ScrollRestoration> calls window.scrollTo on navigation, and
+// pages scroll sections into view.
 window.scrollTo = () => {}
+Element.prototype.scrollIntoView ??= () => {}

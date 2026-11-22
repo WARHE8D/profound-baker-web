@@ -220,6 +220,12 @@ How this app does it ([src/features/auth/session.ts](src/features/auth/session.t
 - Signing out removes the refresh token, and the `storage` event signs out the other tabs.
 - Owner-only queries use keys starting with `'owner'` or `'auth'`; they are dropped on sign-out.
 - Tests sign in with `signInAsOwner()` from `src/test/auth.ts`.
+- Changing the password (`POST /api/owner/password`) makes the server revoke every refresh token, this
+  session's included, so the profile page signs straight back in with the new password.
+- The server can't say whether the Owner still uses `APP_OWNER_INITIAL_PASSWORD`, so the dashboard shows a
+  reminder until the password is changed or the reminder is dismissed. This is remembered per browser
+  (`sugarcrumbs.owner.passwordReminder.<ownerId>`).
+- Saving the profile marks every cached query stale, so a new time zone or name shows everywhere.
 
 ### Checkout and the magic link
 

@@ -116,6 +116,52 @@ export function isValidTimeZone(zone: string): boolean {
   }
 }
 
+/** "UTC+05:30" / "UTC−03:00" / "UTC" for `zone` at `now` (offsets change with daylight saving). */
+export function formatUtcOffset(zone: string, now: Date = new Date()): string {
+  const minutes = Math.round(offsetMs(now.getTime(), zone) / MINUTE)
+  if (minutes === 0) return 'UTC'
+  const sign = minutes > 0 ? '+' : '−'
+  const abs = Math.abs(minutes)
+  return `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+}
+
+export type TimeZoneOption = { value: string; label: string; offsetMinutes: number }
+export type TimeZoneGroup = { region: string; zones: TimeZoneOption[] }
+
+/**
+ * IANA region zones this browser knows, plus UTC, grouped by region ("America", "Europe", …) and
+ * labelled "New York (UTC−05:00)". `include` adds zones the list lacks (e.g. the saved one, if the
+ * browser calls it by another name), so the current value is always selectable.
+ */
+export function timeZoneGroups(now: Date = new Date(), include: string[] = []): TimeZoneGroup[] {
+  const known =
+    typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []
+  const zones = new Set(['UTC', ...known, ...include.filter(isValidTimeZone)])
+  const groups = new Map<string, TimeZoneOption[]>()
+
+  for (const zone of zones) {
+    const slash = zone.indexOf('/')
+    const region = slash === -1 ? 'Other' : zone.slice(0, slash)
+    const place = slash === -1 ? zone : zone.slice(slash + 1).replaceAll('/', ' / ')
+    const offsetMinutes = Math.round(offsetMs(now.getTime(), zone) / MINUTE)
+    const option = {
+      value: zone,
+      label: `${place.replaceAll('_', ' ')} (${formatUtcOffset(zone, now)})`,
+      offsetMinutes,
+    }
+    groups.set(region, [...(groups.get(region) ?? []), option])
+  }
+
+  return [...groups]
+    .map(([region, options]) => ({
+      region,
+      zones: options.toSorted((a, b) => a.label.localeCompare(b.label)),
+    }))
+    .toSorted((a, b) =>
+      a.region === 'Other' ? 1 : b.region === 'Other' ? -1 : a.region.localeCompare(b.region),
+    )
+}
+
 /** The zone's UTC offset at `instant`, in milliseconds (positive east of UTC). */
 function offsetMs(instant: number, zone: string): number {
   const f = localFields(instant, zone)
