@@ -31,13 +31,16 @@ export function monthWeeks(month: string): (string | null)[][] {
   return Array.from({ length: cells.length / 7 }, (_, i) => cells.slice(i * 7, i * 7 + 7))
 }
 
-export type PlainDateFormat = 'day' | 'weekday-date' | 'month-year' | 'weekday-short'
+export type PlainDateFormat =
+  'day' | 'weekday-date' | 'month-year' | 'weekday-short' | 'medium-date' | 'month-day'
 
 const plainFormats: Record<PlainDateFormat, Intl.DateTimeFormatOptions> = {
   day: { day: 'numeric' },
   'weekday-date': { weekday: 'long', day: 'numeric', month: 'long' },
   'month-year': { month: 'long', year: 'numeric' },
   'weekday-short': { weekday: 'short' },
+  'medium-date': { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' },
+  'month-day': { month: 'long', day: 'numeric' },
 }
 
 /**
@@ -48,6 +51,27 @@ export function formatPlainDate(date: string, format: PlainDateFormat, locale?: 
   return new Intl.DateTimeFormat(locale, { ...plainFormats[format], timeZone: 'UTC' }).format(
     toUtcDate(date),
   )
+}
+
+/**
+ * Two plain dates as one range, sharing what they have in common: "Thu, Dec 24 – Sat, Dec 26, 2026",
+ * "December 25 – 26". The same date twice is shown once.
+ */
+export function formatPlainDateRange(
+  start: string,
+  end: string,
+  format: PlainDateFormat,
+  locale?: string,
+): string {
+  const formatter = new Intl.DateTimeFormat(locale, { ...plainFormats[format], timeZone: 'UTC' })
+  return start === end
+    ? formatter.format(toUtcDate(start))
+    : formatter.formatRange(toUtcDate(start), toUtcDate(end))
+}
+
+/** Days from start to end, both included: "2026-12-24" to "2026-12-26" is 3. */
+export function daysBetween(start: string, end: string): number {
+  return Math.round((toUtcDate(end).getTime() - toUtcDate(start).getTime()) / 86_400_000) + 1
 }
 
 function toUtcDate(date: string): Date {

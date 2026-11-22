@@ -1,6 +1,8 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, unwrap } from '@/api'
+import { api, readPage, unwrap, type Schema } from '@/api'
 import { checkoutKeys } from '@/features/checkout/queries'
+import { addDays } from '@/lib/date'
+import { slotToUtc } from '@/lib/time'
 import type { DayChange, DayOfWeek, WorkingHours } from './working-hours'
 
 // Owner-only data: keys start with 'owner', so signing out drops them (see use-session.ts).
@@ -50,5 +52,78 @@ export function useSaveWorkingHours() {
       return { failed, hours }
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: checkoutKeys.availabilityAll }),
+  })
+}
+
+// ---- Closed dates ----
+
+export const blockedDateKeys = {
+  all: ['owner', 'blocked-dates'] as const,
+  activeOrders: (startDate: string, endDate: string, zone: string) =>
+    ['owner', 'orders', 'active-during', { startDate, endDate, zone }] as const,
+}
+
+export const blockedDatesQuery = () =>
+  queryOptions({
+    queryKey: blockedDateKeys.all,
+    queryFn: ({ signal }) => unwrap(api.GET('/api/availability/blocked-dates', { signal })),
+  })
+
+/** Orders still to be handed over: these keep their pickup time when the day is closed. */
+const ACTIVE_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS'] as const
+
+/**
+ * How many active orders are due for pickup between two plain dates (both included), in the
+ * bakery's time zone. Closing those days doesn't cancel them, so the Owner should know. The dates
+ * are only read when it runs: a form can hold this disabled while its dates are still incomplete.
+ */
+export const activeOrdersDuringQuery = (startDate: string, endDate: string, zone: string) =>
+  queryOptions({
+    queryKey: blockedDateKeys.activeOrders(startDate, endDate, zone),
+    queryFn: async ({ signal }) => {
+      const from = slotToUtc(startDate, '00:00', zone)
+      const to = slotToUtc(addDays(endDate, 1), '00:00', zone)
+      const page = await unwrap(
+        api.GET('/api/orders', {
+          params: { query: { from, to, status: [...ACTIVE_STATUSES], size: 1 } },
+          signal,
+        }),
+      )
+      return readPage(page).totalElements
+    },
+  })
+
+/** After any change: the list, and the days guests can pick at checkout. */
+function useRefreshClosures() {
+  const queryClient = useQueryClient()
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: blockedDateKeys.all }),
+      queryClient.invalidateQueries({ queryKey: checkoutKeys.availabilityAll }),
+    ])
+}
+
+export function useSaveBlockedDate() {
+  const refresh = useRefreshClosures()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string | null; request: Schema<'BlockedDateRequest'> }) =>
+      id
+        ? unwrap(
+            api.PUT('/api/availability/blocked-dates/{id}', {
+              params: { path: { id } },
+              body: request,
+            }),
+          )
+        : unwrap(api.POST('/api/availability/blocked-dates', { body: request })),
+    onSuccess: () => refresh(),
+  })
+}
+
+export function useDeleteBlockedDate() {
+  const refresh = useRefreshClosures()
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/api/availability/blocked-dates/{id}', { params: { path: { id } } })),
+    onSuccess: () => refresh(),
   })
 }

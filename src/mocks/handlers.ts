@@ -34,6 +34,24 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     return token
   }
 
+  /** BlockedDateRequest's bean validation and BlockedDate's own rule; null when it's fine. */
+  function checkBlockedDate(request: Request, body: Partial<Schema<'BlockedDateRequest'>>) {
+    const errors: FieldError[] = []
+    if (!body.startDate) errors.push({ field: 'startDate', message: 'must not be null' })
+    if (!body.endDate) errors.push({ field: 'endDate', message: 'must not be null' })
+    if ((body.reason ?? '').length > 200) {
+      errors.push({ field: 'reason', message: 'size must be between 0 and 200' })
+    }
+    if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+    if (!ISO_DATE.test(body.startDate!) || !ISO_DATE.test(body.endDate!)) {
+      return apiError(request, 400, 'malformed request body')
+    }
+    if (body.endDate! < body.startDate!) {
+      return apiError(request, 400, 'endDate cannot be before startDate')
+    }
+    return null
+  }
+
   /** An error exactly like the backend's: ApiError body plus an X-Request-Id header. */
   function apiError(
     request: Request,
@@ -338,6 +356,48 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       )
     }),
 
+    // ---- Blocked dates (owner) ----
+    http.get(api('/api/availability/blocked-dates'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      return HttpResponse.json(
+        store.blockedDates.toSorted((a, b) => a.startDate.localeCompare(b.startDate)),
+      )
+    }),
+
+    http.post(api('/api/availability/blocked-dates'), async ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const body = (await request.json()) as Partial<Schema<'BlockedDateRequest'>>
+      const invalid = checkBlockedDate(request, body)
+      if (invalid) return invalid
+      const created = toBlockedDate(crypto.randomUUID(), body)
+      store.setBlockedDates([...store.blockedDates, created])
+      return HttpResponse.json(created, { status: 201 })
+    }),
+
+    http.put(api('/api/availability/blocked-dates/:id'), async ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const id = String(params.id)
+      if (!store.blockedDates.some((b) => b.id === id)) {
+        return apiError(request, 404, `BlockedDate ${id} not found`)
+      }
+      const body = (await request.json()) as Partial<Schema<'BlockedDateRequest'>>
+      const invalid = checkBlockedDate(request, body)
+      if (invalid) return invalid
+      const updated = toBlockedDate(id, body)
+      store.setBlockedDates(store.blockedDates.map((b) => (b.id === id ? updated : b)))
+      return HttpResponse.json(updated)
+    }),
+
+    http.delete(api('/api/availability/blocked-dates/:id'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const id = String(params.id)
+      if (!store.blockedDates.some((b) => b.id === id)) {
+        return apiError(request, 404, `BlockedDate ${id} not found`)
+      }
+      store.setBlockedDates(store.blockedDates.filter((b) => b.id !== id))
+      return new HttpResponse(null, { status: 204 })
+    }),
+
     // ---- Working hours (owner) ----
     http.get(api('/api/availability/working-hours'), ({ request }) => {
       if (!isOwner(request)) return apiError(request, 401, 'authentication required')
@@ -548,8 +608,12 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       const params = new URL(request.url).searchParams
       const statuses = params.getAll('status')
       const query = params.get('q')?.trim().toLowerCase()
+      // A pickup range: from inclusive, to exclusive, either end open (instants).
+      const from = params.get('from')
+      const to = params.get('to')
       const list = store.orders
         .filter((o) => statuses.length === 0 || statuses.includes(o.status))
+        .filter((o) => (!from || o.pickupAt >= from) && (!to || o.pickupAt < to))
         .filter(
           (o) =>
             !query ||
@@ -611,6 +675,22 @@ function multipartFile(body: Uint8Array, contentType: string | null, name: strin
     start = next
   }
   return null
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+function toBlockedDate(
+  id: string,
+  body: Partial<Schema<'BlockedDateRequest'>>,
+): Schema<'BlockedDateResponse'> {
+  return {
+    id,
+    startDate: body.startDate!,
+    endDate: body.endDate!,
+    // The server stores what it's sent: an empty reason stays empty, a missing one is null.
+    reason: body.reason ?? null,
+    recurringAnnually: body.recurringAnnually ?? false,
+  }
 }
 
 type DayOfWeek = Schema<'WorkingHoursResponse'>['dayOfWeek']
