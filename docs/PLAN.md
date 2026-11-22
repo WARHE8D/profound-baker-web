@@ -36,8 +36,12 @@ the catalogue, availability, orders, invoices and stats.
   - Reads every paginated list through a single `readPage()` helper, because the backend's page shape will
     change.
 - **Auth tokens:**
-  - The access token lives in memory only. The refresh token is kept in `localStorage` (a known trade-off,
-    recorded in the plan).
+  - The access token lives in memory only. The refresh token is kept in `localStorage`. Trade-off: any
+    script running on the page (an XSS bug) could read it. An `HttpOnly` cookie would hide it, but the
+    backend issues tokens in JSON bodies and has no cookie flow; `sessionStorage` would hide it from other
+    tabs but sign the Owner out on every new tab. Mitigations: tokens are rotated on every use (a stolen,
+    reused token revokes the whole chain), the access token is never stored, and the CSP in S8.3 limits
+    script sources.
   - Only one refresh may run at a time, across all tabs (`navigator.locks`), because each refresh token
     works only once and reusing one signs out every session.
 - **Times:** every displayed time uses the Owner's time zone from `/api/owner/profile`. Every value sent to

@@ -61,15 +61,16 @@ Import from `src` with the `@/` alias, for example `import { App } from '@/app/A
 The route table is [src/app/routes.tsx](src/app/routes.tsx). There are two trees, each with its own
 layout and error boundary:
 
-| Path       | What                                                                        |
-| ---------- | --------------------------------------------------------------------------- |
-| `/`        | Storefront: header with cart, page, footer                                  |
-| `/owner/*` | Owner dashboard: sidebar navigation (sign-in guard arrives with owner auth) |
-| `/dev/ui`  | Development only: gallery of the UI primitives; not in production builds    |
+| Path           | What                                                                       |
+| -------------- | -------------------------------------------------------------------------- |
+| `/`            | Storefront: header with cart, page, footer                                 |
+| `/owner/*`     | Owner dashboard: sidebar navigation; signed-in Owner only (`RequireOwner`) |
+| `/owner/login` | Owner sign-in; returns to the page in `?next=` (dashboard paths only)      |
+| `/dev/ui`      | Development only: gallery of the UI primitives; not in production builds   |
 
 Unknown URLs show a 404 page inside the matching layout. If a page crashes, the error shows inside
 the layout so the navigation keeps working. In `npm run dev`, the TanStack Query devtools button sits
-in the bottom-left corner.
+in the bottom-right corner.
 
 ### Configuration
 
@@ -206,6 +207,19 @@ A missing or invalid token returns **401** and the wrong role returns **403**.
   sent again, the server treats it as theft and signs out every session from that login. If two browser
   tabs can refresh at the same time, make sure only one of them does it.
 - `POST /api/auth/logout` with `{ refreshToken }` ends the session.
+
+How this app does it ([src/features/auth/session.ts](src/features/auth/session.ts)):
+
+- The access token stays in the tab's memory. The refresh token is the only thing in `localStorage`
+  (`sugarcrumbs.owner.refreshToken`), shared by every tab.
+- Refreshing is lazy: a request whose access token expires within a minute refreshes first, and a 401
+  refreshes and retries once. Idle tabs don't refresh.
+- Refreshes are serialized across tabs with `navigator.locks`; inside the lock a tab reads the latest
+  refresh token, so it never sends one another tab already used.
+- Storefront pages never restore a stored session; owner pages do, on load.
+- Signing out removes the refresh token, and the `storage` event signs out the other tabs.
+- Owner-only queries use keys starting with `'owner'` or `'auth'`; they are dropped on sign-out.
+- Tests sign in with `signInAsOwner()` from `src/test/auth.ts`.
 
 ### Checkout and the magic link
 

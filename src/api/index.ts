@@ -1,4 +1,10 @@
-export { api, setAccessTokenProvider, unwrap, MAX_RATE_LIMIT_WAIT_SECONDS } from './client'
+export {
+  api,
+  setAccessTokenProvider,
+  setUnauthorizedHandler,
+  unwrap,
+  MAX_RATE_LIMIT_WAIT_SECONDS,
+} from './client'
 export { apiBaseUrl } from './config'
 export { ApiError, isApiError, type ApiErrorBody, type FieldError } from './errors'
 export { readPage, type Page, type SpringPage } from './page'

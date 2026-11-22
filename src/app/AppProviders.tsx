@@ -1,6 +1,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useState, type ReactNode } from 'react'
 import { ToastProvider } from '@/components'
+import { useClearOwnerDataOnSignOut } from '@/features/auth/use-session'
 import { createQueryClient } from './query-client'
 
 // Loaded only in development (not in tests), so the devtools never reach the production bundle.
@@ -22,12 +23,19 @@ export function AppProviders({ children, queryClient }: AppProvidersProps) {
 
   return (
     <QueryClientProvider client={client}>
+      <ClearOwnerDataOnSignOut />
       <ToastProvider>{children}</ToastProvider>
       {ReactQueryDevtools && (
         <Suspense fallback={null}>
-          <ReactQueryDevtools buttonPosition="bottom-left" />
+          <ReactQueryDevtools buttonPosition="bottom-right" />
         </Suspense>
       )}
     </QueryClientProvider>
   )
+}
+
+/** Wherever the Owner is in the app when the session ends, their cached data goes with it. */
+function ClearOwnerDataOnSignOut() {
+  useClearOwnerDataOnSignOut()
+  return null
 }

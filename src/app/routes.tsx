@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router'
 import { CartPage } from '@/features/cart/CartPage'
+import { RequireOwner } from '@/features/auth/RequireOwner'
 import { CataloguePage } from '@/features/catalogue/CataloguePage'
 import { ItemPage } from '@/features/catalogue/ItemPage'
 import { OwnerLayout } from './layouts/OwnerLayout'
@@ -22,7 +23,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 /**
  * Two trees, each with its own layout:
  *   /        storefront (public)
- *   /owner/* owner dashboard (sign-in guard added in S4.1)
+ *   /owner/* owner dashboard, behind RequireOwner (sign-in at /owner/login, outside both)
  * Each layout has an outer error boundary (the layout itself failed) and an inner pathless one, so
  * a crashing page renders its error inside the layout and the navigation keeps working.
  */
@@ -65,9 +66,19 @@ export const routes: RouteObject[] = [
       },
     ],
   },
+  // Its own bare page: no storefront header, and outside the guard so it can't redirect to itself.
+  {
+    path: '/owner/login',
+    ErrorBoundary: RouteErrorBoundary,
+    lazy: async () => ({ Component: (await import('@/features/auth/LoginPage')).LoginPage }),
+  },
   {
     path: '/owner',
-    Component: OwnerLayout,
+    element: (
+      <RequireOwner>
+        <OwnerLayout />
+      </RequireOwner>
+    ),
     ErrorBoundary: RouteErrorBoundary,
     children: [
       {
