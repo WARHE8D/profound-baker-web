@@ -22,6 +22,9 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 
 /** Owner pages that exist, by their path under /owner; the rest of the nav shows "coming soon". */
 const ownerPages: Record<string, RouteObject['lazy']> = {
+  categories: async () => ({
+    Component: (await import('@/features/categories/CategoriesPage')).CategoriesPage,
+  }),
   profile: async () => ({
     Component: (await import('@/features/profile/ProfilePage')).ProfilePage,
   }),

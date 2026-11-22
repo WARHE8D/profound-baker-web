@@ -4,6 +4,7 @@ import type { Schema } from '@/api'
 import { slotToUtc, todayIn } from '@/lib/time'
 import {
   blockedDates,
+  categories as fixtureCategories,
   FIXTURE_OWNER_CREDENTIALS,
   FIXTURE_TIME_ZONE,
   items,
@@ -50,6 +51,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   let sequence = 0
   let profile: Schema<'OwnerProfileResponse'> = structuredClone(ownerProfile)
   let password: string = FIXTURE_OWNER_CREDENTIALS.password
+  let categories: Schema<'CategoryResponse'>[] = structuredClone(fixtureCategories)
 
   const nextId = (prefix: string) => {
     sequence += 1
@@ -112,6 +114,17 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     },
     setProfile(next: Schema<'OwnerProfileResponse'>) {
       profile = next
+    },
+    /** Categories as created, renamed and deleted through the owner API (unsorted, like the DB). */
+    get categories(): readonly Schema<'CategoryResponse'>[] {
+      return categories
+    },
+    setCategories(next: Schema<'CategoryResponse'>[]) {
+      categories = next
+    },
+    /** An item's category as it is now (renamed categories show their new name). */
+    categoryOf(item: Schema<'ItemResponse'>): Schema<'CategoryResponse'> {
+      return categories.find((c) => c.id === item.category.id) ?? item.category
     },
     /** The Owner's current password (the fixture one until changed). */
     get password(): string {
@@ -194,6 +207,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       fixedNow = null
       profile = structuredClone(ownerProfile)
       password = FIXTURE_OWNER_CREDENTIALS.password
+      categories = structuredClone(fixtureCategories)
     },
   }
 }
