@@ -3,7 +3,7 @@
 import type { Schema } from '@/api'
 import { slotToUtc, todayIn } from '@/lib/time'
 import {
-  blockedDates,
+  blockedDates as fixtureBlockedDates,
   categories as fixtureCategories,
   FIXTURE_OWNER_CREDENTIALS,
   FIXTURE_TIME_ZONE,
@@ -31,12 +31,13 @@ const DAY_NAMES = [
 export const GUEST_CANCEL_CUTOFF_HOURS = 24
 
 /** The closure reason for a date, if a blocked range covers it (recurring ones ignore the year). */
-function isBlocked(date: string): string | null {
+function isBlocked(blockedDates: readonly Schema<'BlockedDateResponse'>[], date: string) {
   for (const b of blockedDates) {
     const inRange = b.recurringAnnually
       ? date.slice(5) >= b.startDate.slice(5) && date.slice(5) <= b.endDate.slice(5)
       : date >= b.startDate && date <= b.endDate
-    if (inRange) return b.reason ?? 'Closed'
+    // Like BlockedDateService: no reason reads "Unavailable".
+    if (inRange) return b.reason ?? 'Unavailable'
   }
   return null
 }
@@ -54,6 +55,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   let categories: Schema<'CategoryResponse'>[] = structuredClone(fixtureCategories)
   let items: Schema<'ItemResponse'>[] = structuredClone(fixtureItems)
   let workingHours: Schema<'WorkingHoursResponse'>[] = structuredClone(fixtureWorkingHours)
+  let blockedDates: Schema<'BlockedDateResponse'>[] = structuredClone(fixtureBlockedDates)
   /** Uploaded image files by name (`<uuid>`), as the server keeps them on disk. */
   const uploads = new Map<string, { bytes: Uint8Array; type: string }>()
 
@@ -66,7 +68,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   function dayAvailability(date: string): Schema<'DayAvailabilityResponse'> {
     const weekday = DAY_NAMES[new Date(`${date}T12:00:00Z`).getUTCDay()]
     const hours = workingHours.find((h) => h.dayOfWeek === weekday)
-    const blockedReason = isBlocked(date)
+    const blockedReason = isBlocked(blockedDates, date)
     if (!hours || blockedReason) {
       return {
         date,
@@ -124,6 +126,13 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     },
     setProfile(next: Schema<'OwnerProfileResponse'>) {
       profile = next
+    },
+    /** Closures, as added, edited and removed through the owner API. */
+    get blockedDates(): readonly Schema<'BlockedDateResponse'>[] {
+      return blockedDates
+    },
+    setBlockedDates(next: Schema<'BlockedDateResponse'>[]) {
+      blockedDates = next
     },
     /** The weekly hours, as set and removed through the owner API (unsorted, like the DB). */
     get workingHours(): readonly Schema<'WorkingHoursResponse'>[] {
@@ -266,6 +275,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       categories = structuredClone(fixtureCategories)
       items = structuredClone(fixtureItems)
       workingHours = structuredClone(fixtureWorkingHours)
+      blockedDates = structuredClone(fixtureBlockedDates)
       uploads.clear()
     },
   }

@@ -8,7 +8,8 @@ import { isApiError } from '@/api'
 import { Button, Dialog, ErrorState, Field, Input, Select, Spinner, useToast } from '@/components'
 import { bakeryQuery } from '@/features/checkout/queries'
 import { cn } from '@/lib/cn'
-import { formatSlotTime, formatUtcOffset } from '@/lib/time'
+import { formatSlotTime, formatUtcOffset, todayIn } from '@/lib/time'
+import { ClosedDates } from './ClosedDates'
 import { useSaveWorkingHours, workingHoursQuery } from './queries'
 import {
   changesBetween,
@@ -29,7 +30,7 @@ import {
 
 type Problem = { message: string; requestId: string | null }
 
-/** `/owner/availability`: when guests can pick up orders. */
+/** `/owner/availability`: when guests can pick up orders: weekly hours and closed dates. */
 export function AvailabilityPage() {
   const hours = useQuery(workingHoursQuery())
   const bakery = useQuery(bakeryQuery())
@@ -64,6 +65,9 @@ export function AvailabilityPage() {
           <Spinner label="Loading working hours" />
         </div>
       )}
+
+      {/* Which days are past depends on the bakery's today, so this waits for its time zone. */}
+      {zone && <ClosedDates today={todayIn(zone)} zone={zone} />}
     </div>
   )
 }

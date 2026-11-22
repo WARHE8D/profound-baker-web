@@ -339,6 +339,81 @@ test('uploaded image URLs return a placeholder image', async () => {
   expect(await response.text()).toContain('>B</text>')
 })
 
+/** How many orders are due for pickup from `from` (included) to `to` (excluded). */
+const ordersBetween = (from: string, to: string) =>
+  unwrap(api.GET('/api/orders', { params: { query: { from, to } } })).then(
+    (page) => readPage(page).totalElements,
+  )
+
+describe('closed dates', () => {
+  beforeEach(async () => {
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('added, edited and removed closures change guests’ days', async () => {
+    const created = await unwrap(
+      api.POST('/api/availability/blocked-dates', {
+        body: { startDate: MONDAY, endDate: MONDAY, recurringAnnually: false },
+      }),
+    )
+    expect(created).toMatchObject({ reason: null, recurringAnnually: false })
+    // Like the server: no reason reads "Unavailable".
+    expect(await day(MONDAY)).toMatchObject({ open: false, reason: 'Unavailable' })
+
+    await unwrap(
+      api.PUT('/api/availability/blocked-dates/{id}', {
+        params: { path: { id: created.id } },
+        body: { startDate: MONDAY, endDate: MONDAY, reason: 'Inventory' },
+      }),
+    )
+    expect(await day(MONDAY)).toMatchObject({ open: false, reason: 'Inventory' })
+
+    await unwrap(
+      api.DELETE('/api/availability/blocked-dates/{id}', { params: { path: { id: created.id } } }),
+    )
+    expect(await day(MONDAY)).toMatchObject({ open: true })
+    const list = await unwrap(api.GET('/api/availability/blocked-dates'))
+    expect(list.map((b) => b.startDate)).toEqual(['2026-12-25', '2027-01-11'])
+  })
+
+  test('rejects closures like the server does', async () => {
+    const create = (body: Partial<Schema<'BlockedDateRequest'>>) =>
+      failure(
+        unwrap(
+          api.POST('/api/availability/blocked-dates', {
+            body: body as Schema<'BlockedDateRequest'>,
+          }),
+        ),
+      )
+    expect(await create({ startDate: MONDAY })).toMatchObject({
+      status: 400,
+      fieldErrors: [{ field: 'endDate', message: 'must not be null' }],
+    })
+    expect(await create({ startDate: MONDAY, endDate: '2026-11-22' })).toMatchObject({
+      status: 400,
+      message: 'endDate cannot be before startDate',
+    })
+    expect(
+      await failure(
+        unwrap(
+          api.DELETE('/api/availability/blocked-dates/{id}', {
+            params: { path: { id: '40000000-0000-4000-8000-0000000000ff' } },
+          }),
+        ),
+      ),
+    ).toMatchObject({ status: 404 })
+  })
+
+  test('orders can be listed by pickup range', async () => {
+    await unwrap(checkout())
+    const pickup = slotToUtc(MONDAY, '10:00', FIXTURE_TIME_ZONE)
+    expect(await ordersBetween(pickup, slotToUtc(MONDAY, '10:30', FIXTURE_TIME_ZONE))).toBe(1)
+    // "to" is exclusive.
+    expect(await ordersBetween(slotToUtc(MONDAY, '09:00', FIXTURE_TIME_ZONE), pickup)).toBe(0)
+  })
+})
+
 /** As the API is called with any day name, valid or not. */
 const setHours = (dayOfWeek: string, body: Partial<Schema<'WorkingHoursRequest'>>) =>
   unwrap(

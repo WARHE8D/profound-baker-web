@@ -270,6 +270,12 @@ offered. The editor at `/owner/availability` previews those slots with the same 
 ([src/features/availability/working-hours.ts](src/features/availability/working-hours.ts)) and saves
 only the days that changed, one request each, so a rejected day doesn't hold back the others.
 
+Closed dates (`/api/availability/blocked-dates`) are ranges of whole days on top of the weekly hours;
+guests see the reason at checkout. A yearly closure is matched by month and day, so the server would
+never match one running past December 31: the form asks for two instead
+([src/features/availability/blocked-dates.ts](src/features/availability/blocked-dates.ts)). Closing
+days doesn't cancel orders already due then; the form says how many there are.
+
 ### Order lifecycle
 
 `PENDING` → `CONFIRMED` (or `REJECTED`, with a reason) → `IN_PROGRESS` → `FULFILLED`.
