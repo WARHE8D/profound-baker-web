@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, expect, test, vi } from 'vitest'
 import type { Schema } from '@/api/types'
@@ -126,7 +126,8 @@ test('empties the cart', async () => {
   renderConfirmation()
 
   await screen.findByRole('heading', { name: 'Thank you, your order is placed' })
-  expect(cartStore.getLines()).toEqual([])
+  // Cleared in an effect, which can run just after the heading first appears.
+  await waitFor(() => expect(cartStore.getLines()).toEqual([]))
 })
 
 test('explains itself when opened without an order', async () => {

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import type { RouteObject } from 'react-router'
 import { expect, test, vi } from 'vitest'
 import { ApiError } from '@/api'
+import { signInAsOwner } from '@/test/auth'
 import { renderRoute } from '@/test/render'
 import { PublicLayout } from './layouts/PublicLayout'
 import { RouteErrorBoundary } from './pages/RouteErrorBoundary'
@@ -41,6 +42,7 @@ test('an unknown public URL shows the 404 page inside the storefront layout', as
 })
 
 test('/owner shows the owner layout with Dashboard as the current page', async () => {
+  await signInAsOwner()
   renderRoute('/owner')
 
   const nav = await screen.findByRole('navigation', { name: 'Owner' })
@@ -52,6 +54,7 @@ test('/owner shows the owner layout with Dashboard as the current page', async (
 })
 
 test('the owner sidebar navigates between sections', async () => {
+  await signInAsOwner()
   renderRoute('/owner')
   const nav = await screen.findByRole('navigation', { name: 'Owner' })
 
@@ -63,6 +66,7 @@ test('the owner sidebar navigates between sections', async () => {
 })
 
 test('an unknown owner URL shows the 404 page inside the owner layout', async () => {
+  await signInAsOwner()
   renderRoute('/owner/no-such-page')
 
   expect(

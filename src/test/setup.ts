@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
+import { session } from '@/features/auth/session'
 import { cartStore } from '@/features/cart/cart-store'
 import { mockStore } from './msw/handlers'
 import { server } from './msw/server'
@@ -17,6 +18,8 @@ afterEach(() => {
   cartStore.clear()
   localStorage.clear()
   sessionStorage.clear()
+  // After localStorage: the session re-reads it and starts signed out.
+  session.resetForTests()
 })
 
 afterAll(() => server.close())

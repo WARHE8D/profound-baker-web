@@ -90,8 +90,8 @@ test('places the order and shows the confirmation with the order link', async ()
     'href',
     `${window.location.origin}/orders/${order!.accessToken}`,
   )
-  // The cart is emptied; the header shows it.
-  expect(cartStore.getLines()).toEqual([])
+  // The cart is emptied (in an effect, so maybe a moment after the heading); the header shows it.
+  await waitFor(() => expect(cartStore.getLines()).toEqual([]))
   expect(screen.getByRole('button', { name: 'Cart, 0 items' })).toBeInTheDocument()
 })
 

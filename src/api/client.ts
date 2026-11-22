@@ -56,9 +56,50 @@ export function setAccessTokenProvider(provider: AccessTokenProvider | null): vo
   accessTokenProvider = provider ?? (() => null)
 }
 
+/**
+ * Called when a request sent with an access token comes back 401: the token expired or was
+ * revoked. Returns a fresh token to retry with once, or null to give up (signed out).
+ */
+type UnauthorizedHandler = (rejectedToken: string) => Promise<string | null>
+
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+/** Hook for owner auth: refreshes the session when the server rejects an access token. */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler
+}
+
+const bearerToken = (headers: Headers) =>
+  headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1] ?? null
+
+/**
+ * Sends the request; if the server rejects its access token (401), gets a fresh one from the
+ * unauthorized handler and retries once. Requests without a token (public, login, refresh) and a
+ * second 401 come back as they are.
+ */
+export async function fetchWithAuthRetry(
+  request: Request,
+  doFetch: (request: Request) => Promise<Response> = (r) => fetchWithRateLimitRetry(r),
+): Promise<Response> {
+  const token = bearerToken(request.headers)
+  const retry = token && unauthorizedHandler ? request.clone() : null
+  const response = await doFetch(request)
+  if (response.status !== 401 || !retry || !token || !unauthorizedHandler) return response
+
+  const fresh = await unauthorizedHandler(token)
+  if (!fresh || fresh === token) return response
+  retry.headers.set('Authorization', `Bearer ${fresh}`)
+  return doFetch(retry)
+}
+
+/** Auth calls that carry the refresh token in the body: never an access token, never retried. */
+const TOKEN_ENDPOINTS = /\/api\/auth\/(login|refresh|logout)$/
+
 const authMiddleware: Middleware = {
   async onRequest({ request }) {
     if (request.headers.has('Authorization')) return undefined
+    // Asking for a token here could start a refresh, and a refresh waiting on itself never ends.
+    if (TOKEN_ENDPOINTS.test(new URL(request.url).pathname)) return undefined
     const token = await accessTokenProvider()
     if (token) request.headers.set('Authorization', `Bearer ${token}`)
     return request
@@ -68,7 +109,7 @@ const authMiddleware: Middleware = {
 /** The one API client. Paths, params and bodies are typed from the OpenAPI spec. */
 export const api = createClient<paths>({
   baseUrl: apiBaseUrl,
-  fetch: (request) => fetchWithRateLimitRetry(request),
+  fetch: (request) => fetchWithAuthRetry(request),
 })
 api.use(authMiddleware)
 

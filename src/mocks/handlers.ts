@@ -55,10 +55,10 @@ export function createHandlers(store: MockStore): HttpHandler[] {
   function issueTokens(): Schema<'TokenResponse'> {
     tokenCount += 1
     return {
-      accessToken: `mock-access-${tokenCount}`,
+      accessToken: `mock-access-${tokenCount}-${crypto.randomUUID()}`,
       tokenType: 'Bearer',
       expiresIn: ACCESS_TOKEN_SECONDS,
-      refreshToken: `mock-refresh-${tokenCount}`,
+      refreshToken: `mock-refresh-${tokenCount}-${crypto.randomUUID()}`,
       refreshTokenExpiresAt: new Date(store.now().getTime() + 14 * 86_400_000).toISOString(),
     }
   }
