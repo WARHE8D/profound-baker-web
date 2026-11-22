@@ -7,7 +7,7 @@ import {
   categories as fixtureCategories,
   FIXTURE_OWNER_CREDENTIALS,
   FIXTURE_TIME_ZONE,
-  items,
+  items as fixtureItems,
   ownerProfile,
   workingHours,
 } from './fixtures'
@@ -52,6 +52,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   let profile: Schema<'OwnerProfileResponse'> = structuredClone(ownerProfile)
   let password: string = FIXTURE_OWNER_CREDENTIALS.password
   let categories: Schema<'CategoryResponse'>[] = structuredClone(fixtureCategories)
+  let items: Schema<'ItemResponse'>[] = structuredClone(fixtureItems)
 
   const nextId = (prefix: string) => {
     sequence += 1
@@ -122,6 +123,29 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     setCategories(next: Schema<'CategoryResponse'>[]) {
       categories = next
     },
+    /** The Owner's items, as created, edited and deleted through the owner API. */
+    get items(): readonly Schema<'ItemResponse'>[] {
+      return items
+    },
+    setItems(next: Schema<'ItemResponse'>[]) {
+      items = next
+    },
+    findItem: (id: string) => items.find((i) => i.id === id),
+    /** Replaces one item (or adds it), recomputing `orderable` and `updatedAt` like the backend. */
+    saveItem(item: Schema<'ItemResponse'>): Schema<'ItemResponse'> {
+      const saved = {
+        ...item,
+        orderable: item.available && (item.stockQuantity === null || item.stockQuantity > 0),
+        updatedAt: now().toISOString(),
+      }
+      items = items.some((i) => i.id === saved.id)
+        ? items.map((i) => (i.id === saved.id ? saved : i))
+        : [...items, saved]
+      return saved
+    },
+    /** Whether any order (cancelled ones included) has a line for the item. */
+    hasOrderHistory: (itemId: string) =>
+      orders.some((o) => o.lines.some((line) => line.itemId === itemId)),
     /** An item's category as it is now (renamed categories show their new name). */
     categoryOf(item: Schema<'ItemResponse'>): Schema<'CategoryResponse'> {
       return categories.find((c) => c.id === item.category.id) ?? item.category
@@ -208,6 +232,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       profile = structuredClone(ownerProfile)
       password = FIXTURE_OWNER_CREDENTIALS.password
       categories = structuredClone(fixtureCategories)
+      items = structuredClone(fixtureItems)
     },
   }
 }

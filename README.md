@@ -239,6 +239,16 @@ How this app does it ([src/features/auth/session.ts](src/features/auth/session.t
    once**. Build the guest's order link from it right away and show it to them. Later,
    `GET /api/public/orders/by-token/{token}` loads the order. An unknown or expired token returns 404.
 
+### Editing items
+
+`PUT /api/catalogue/items/{id}` replaces every descriptive field, stock included, and has no version
+field. Saving a whole form opened earlier would undo changes made since, such as stock that guests just
+bought. The item editor therefore loads the item again on save and applies only the fields the Owner
+edited ([src/features/items/item-form.ts](src/features/items/item-form.ts)). A 409 means two writes hit
+the item at the same moment: the editor reloads and re-applies once, then asks the Owner to save again.
+Availability has its own `PATCH …/availability`. Items that appear in any order can't be deleted (409),
+only hidden.
+
 ### Order lifecycle
 
 `PENDING` → `CONFIRMED` (or `REJECTED`, with a reason) → `IN_PROGRESS` → `FULFILLED`.

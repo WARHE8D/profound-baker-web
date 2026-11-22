@@ -4,7 +4,7 @@ import { http, HttpResponse, type HttpHandler } from 'msw'
 import type { FieldError, Schema } from '@/api'
 import { apiBaseUrl } from '@/api/config'
 import { addDays } from '@/lib/date'
-import { items, toPublicItem } from './fixtures'
+import { toPublicItem } from './fixtures'
 import type { MockStore, StoredOrder } from './store'
 
 const MAX_AVAILABILITY_DAYS = 62
@@ -98,7 +98,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       const params = new URL(request.url).searchParams
       const categoryId = params.get('categoryId')
       const search = params.get('search')?.trim().toLowerCase()
-      const visible = items
+      const visible = store.items
         .filter((i) => i.available)
         .filter((i) => !categoryId || i.category.id === categoryId)
         .filter((i) => !search || i.name.toLowerCase().includes(search))
@@ -109,7 +109,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     }),
 
     http.get(api('/api/public/catalogue/items/:id'), ({ request, params }) => {
-      const item = items.find((i) => i.id === params.id && i.available)
+      const item = store.items.find((i) => i.id === params.id && i.available)
       if (!item) return apiError(request, 404, 'item not found')
       return HttpResponse.json(toPublicItem({ ...item, category: store.categoryOf(item) }))
     }),
@@ -154,7 +154,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       const category = store.categories.find((c) => c.id === params.id)
       if (!category) return apiError(request, 404, `Category ${String(params.id)} not found`)
       // Like the backend: any item, available or not, keeps its category from being deleted.
-      if (items.some((i) => i.category.id === category.id)) {
+      if (store.items.some((i) => i.category.id === category.id)) {
         return apiError(
           request,
           409,
@@ -162,6 +162,118 @@ export function createHandlers(store: MockStore): HttpHandler[] {
         )
       }
       store.setCategories(store.categories.filter((c) => c.id !== category.id))
+      return new HttpResponse(null, { status: 204 })
+    }),
+
+    // ---- Catalogue (owner): items ----
+    http.get(api('/api/catalogue/items'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const params = new URL(request.url).searchParams
+      const categoryId = params.get('categoryId')
+      const available = params.get('available')
+      const search = params.get('search')?.trim().toLowerCase()
+      const [sortField = 'name', sortDir = 'asc'] = (params.get('sort') ?? 'name,asc').split(',')
+      const sortable: Record<string, (i: Schema<'ItemResponse'>) => string | number> = {
+        name: (i) => i.name.toLowerCase(),
+        price: (i) => i.price,
+        leadTimeHours: (i) => i.leadTimeHours,
+        // Unlimited (null) sorts after any number, like nulls in Postgres ascending.
+        stockQuantity: (i) => i.stockQuantity ?? Number.MAX_SAFE_INTEGER,
+        updatedAt: (i) => i.updatedAt,
+        'category.name': (i) => store.categoryOf(i).name.toLowerCase(),
+      }
+      const key = sortable[sortField]
+      if (!key) return apiError(request, 400, `No property '${sortField}' found for type 'Item'`)
+      const direction = sortDir.toLowerCase() === 'desc' ? -1 : 1
+      const list = store.items
+        .filter((i) => !categoryId || i.category.id === categoryId)
+        .filter((i) => available === null || String(i.available) === available)
+        .filter((i) => !search || i.name.toLowerCase().includes(search))
+        .map((i) => ({ ...i, category: store.categoryOf(i) }))
+        .toSorted((a, b) => {
+          const [x, y] = [key(a), key(b)]
+          return (x < y ? -1 : x > y ? 1 : a.name.localeCompare(b.name)) * direction
+        })
+      const page: Schema<'PageItemResponse'> = springPage(list, params)
+      return HttpResponse.json(page)
+    }),
+
+    http.get(api('/api/catalogue/items/:id'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const item = store.findItem(String(params.id))
+      if (!item) return apiError(request, 404, `Item ${String(params.id)} not found`)
+      return HttpResponse.json({ ...item, category: store.categoryOf(item) })
+    }),
+
+    http.post(api('/api/catalogue/items'), async ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const body = (await request.json()) as Schema<'ItemRequest'>
+      const errors = validateItem(body)
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      const category = store.categories.find((c) => c.id === body.categoryId)
+      if (!category) return apiError(request, 404, `Category ${body.categoryId} not found`)
+      const timestamp = store.now().toISOString()
+      const created = store.saveItem({
+        id: crypto.randomUUID(),
+        name: body.name,
+        description: body.description ?? null,
+        price: Math.round(body.price * 100) / 100,
+        category,
+        available: true,
+        leadTimeHours: body.leadTimeHours ?? 0,
+        stockQuantity: body.stockQuantity ?? null,
+        orderable: true,
+        imageUrls: [],
+        thumbnailUrls: [],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      return HttpResponse.json(created, { status: 201 })
+    }),
+
+    http.put(api('/api/catalogue/items/:id'), async ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const item = store.findItem(String(params.id))
+      if (!item) return apiError(request, 404, `Item ${String(params.id)} not found`)
+      const body = (await request.json()) as Schema<'ItemRequest'>
+      const errors = validateItem(body)
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      const category = store.categories.find((c) => c.id === body.categoryId)
+      if (!category) return apiError(request, 404, `Category ${body.categoryId} not found`)
+      const saved = store.saveItem({
+        ...item,
+        name: body.name,
+        description: body.description ?? null,
+        price: Math.round(body.price * 100) / 100,
+        category,
+        leadTimeHours: body.leadTimeHours ?? 0,
+        stockQuantity: body.stockQuantity ?? null,
+      })
+      return HttpResponse.json(saved)
+    }),
+
+    http.patch(api('/api/catalogue/items/:id/availability'), async ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const item = store.findItem(String(params.id))
+      if (!item) return apiError(request, 404, `Item ${String(params.id)} not found`)
+      const { available } = (await request.json()) as Schema<'AvailabilityRequest'>
+      return HttpResponse.json(
+        store.saveItem({ ...item, category: store.categoryOf(item), available }),
+      )
+    }),
+
+    http.delete(api('/api/catalogue/items/:id'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const item = store.findItem(String(params.id))
+      if (!item) return apiError(request, 404, `Item ${String(params.id)} not found`)
+      if (store.hasOrderHistory(item.id)) {
+        return apiError(
+          request,
+          409,
+          `cannot delete item '${item.name}': it has order history. Mark it unavailable instead.`,
+        )
+      }
+      store.setItems(store.items.filter((i) => i.id !== item.id))
       return new HttpResponse(null, { status: 204 })
     }),
 
@@ -191,7 +303,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       }
 
       for (const line of body.lines) {
-        const item = items.find((i) => i.id === line.itemId)
+        const item = store.findItem(line.itemId)
         if (!item?.available) return apiError(request, 404, 'item not found')
         if (!item.orderable) return apiError(request, 409, `${item.name} is sold out`)
       }
@@ -203,7 +315,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
         ])
       }
       const leadHours = Math.max(
-        ...body.lines.map((l) => items.find((i) => i.id === l.itemId)?.leadTimeHours ?? 0),
+        ...body.lines.map((l) => store.findItem(l.itemId)?.leadTimeHours ?? 0),
       )
       if (Date.parse(body.pickupAt) <= store.now().getTime()) {
         return apiError(request, 400, 'pickupAt must be in the future', [
@@ -355,7 +467,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     // ---- Uploaded images: a generated placeholder per item ----
     http.get(`${apiBaseUrl}/uploads/items/:file`, ({ params }) => {
       const id = String(params.file).replace(/(-thumb)?\.\w+$/, '')
-      const item = items.find((i) => i.id === id)
+      const item = store.findItem(id)
       return new HttpResponse(placeholderSvg(item?.name ?? '?'), {
         headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'max-age=3600' },
       })
@@ -370,6 +482,34 @@ const REASONS: Record<number, string> = {
   404: 'Not Found',
   409: 'Conflict',
   429: 'Too Many Requests',
+}
+
+/** The backend's bean validation for ItemRequest, plus Item's own invariants. */
+function validateItem(body: Schema<'ItemRequest'>): FieldError[] {
+  const errors: FieldError[] = []
+  if (!body.name?.trim()) errors.push({ field: 'name', message: 'must not be blank' })
+  else if (body.name.length > 150) {
+    errors.push({ field: 'name', message: 'size must be between 0 and 150' })
+  }
+  if ((body.description ?? '').length > 2000) {
+    errors.push({ field: 'description', message: 'size must be between 0 and 2000' })
+  }
+  if (typeof body.price !== 'number' || body.price < 0.01) {
+    errors.push({ field: 'price', message: 'must be greater than or equal to 0.01' })
+  } else if (!/^\d{1,8}(\.\d{1,2})?$/.test(String(body.price))) {
+    errors.push({
+      field: 'price',
+      message: 'numeric value out of bounds (<8 digits>.<2 digits> expected)',
+    })
+  }
+  if (!body.categoryId) errors.push({ field: 'categoryId', message: 'must not be null' })
+  if ((body.leadTimeHours ?? 0) < 0) {
+    errors.push({ field: 'leadTimeHours', message: 'must be greater than or equal to 0' })
+  }
+  if (body.stockQuantity != null && body.stockQuantity < 0) {
+    errors.push({ field: 'stockQuantity', message: 'must be greater than or equal to 0' })
+  }
+  return errors
 }
 
 /** CategoryRequest: @NotBlank @Size(max = 100). */
