@@ -4,13 +4,7 @@ import { http, HttpResponse, type HttpHandler } from 'msw'
 import type { FieldError, Schema } from '@/api'
 import { apiBaseUrl } from '@/api/config'
 import { addDays } from '@/lib/date'
-import {
-  categories,
-  FIXTURE_OWNER_CREDENTIALS,
-  items,
-  ownerProfile,
-  toPublicItem,
-} from './fixtures'
+import { categories, items, toPublicItem } from './fixtures'
 import type { MockStore, StoredOrder } from './store'
 
 const MAX_AVAILABILITY_DAYS = 62
@@ -29,6 +23,11 @@ export function createHandlers(store: MockStore): HttpHandler[] {
   let requestCount = 0
   let tokenCount = 0
   const usedRefreshTokens = new Set<string>()
+  const issuedRefreshTokens = new Set<string>()
+  const rememberRefreshToken = (token: string) => {
+    issuedRefreshTokens.add(token)
+    return token
+  }
 
   /** An error exactly like the backend's: ApiError body plus an X-Request-Id header. */
   function apiError(
@@ -58,7 +57,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       accessToken: `mock-access-${tokenCount}-${crypto.randomUUID()}`,
       tokenType: 'Bearer',
       expiresIn: ACCESS_TOKEN_SECONDS,
-      refreshToken: `mock-refresh-${tokenCount}-${crypto.randomUUID()}`,
+      refreshToken: rememberRefreshToken(`mock-refresh-${tokenCount}-${crypto.randomUUID()}`),
       refreshTokenExpiresAt: new Date(store.now().getTime() + 14 * 86_400_000).toISOString(),
     }
   }
@@ -83,11 +82,11 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     // ---- The bakery (public): name, time zone and contact for the storefront ----
     http.get(api('/api/public/bakery'), () => {
       const bakery: Schema<'PublicBakeryResponse'> = {
-        businessName: ownerProfile.businessName,
-        timeZone: ownerProfile.timeZone,
-        logoUrl: ownerProfile.logoUrl,
-        phone: ownerProfile.phone,
-        address: ownerProfile.address,
+        businessName: store.profile.businessName,
+        timeZone: store.profile.timeZone,
+        logoUrl: store.profile.logoUrl,
+        phone: store.profile.phone,
+        address: store.profile.address,
       }
       return HttpResponse.json(bakery)
     }),
@@ -197,10 +196,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     // ---- Owner auth ----
     http.post(api('/api/auth/login'), async ({ request }) => {
       const body = (await request.json()) as Schema<'LoginRequest'>
-      if (
-        body.email !== FIXTURE_OWNER_CREDENTIALS.email ||
-        body.password !== FIXTURE_OWNER_CREDENTIALS.password
-      ) {
+      if (body.email?.toLowerCase() !== store.profile.email || body.password !== store.password) {
         return apiError(request, 401, 'invalid email or password')
       }
       return HttpResponse.json(issueTokens())
@@ -221,17 +217,61 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     http.get(api('/api/auth/me'), ({ request }) => {
       if (!isOwner(request)) return apiError(request, 401, 'authentication required')
       const me: Schema<'OwnerResponse'> = {
-        id: ownerProfile.id,
-        email: ownerProfile.email,
-        ownerName: ownerProfile.ownerName,
-        businessName: ownerProfile.businessName,
+        id: store.profile.id,
+        email: store.profile.email,
+        ownerName: store.profile.ownerName,
+        businessName: store.profile.businessName,
       }
       return HttpResponse.json(me)
     }),
 
     http.get(api('/api/owner/profile'), ({ request }) => {
       if (!isOwner(request)) return apiError(request, 401, 'authentication required')
-      return HttpResponse.json(ownerProfile)
+      return HttpResponse.json(store.profile)
+    }),
+
+    http.put(api('/api/owner/profile'), async ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const body = (await request.json()) as Schema<'OwnerProfileRequest'>
+      const errors = validateProfile(body)
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      if (!isIanaZone(body.timeZone)) {
+        return apiError(
+          request,
+          400,
+          "timeZone must be an IANA time zone id such as 'Europe/London'",
+        )
+      }
+      store.setProfile({
+        ...store.profile,
+        businessName: body.businessName,
+        ownerName: body.ownerName,
+        phone: body.phone ?? null,
+        logoUrl: body.logoUrl ?? null,
+        address: body.address ?? null,
+        timeZone: body.timeZone,
+      })
+      return HttpResponse.json(store.profile)
+    }),
+
+    http.post(api('/api/owner/password'), async ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const body = (await request.json()) as Schema<'ChangePasswordRequest'>
+      const errors: FieldError[] = []
+      if ((body.newPassword ?? '').length < 12 || body.newPassword.length > 128) {
+        errors.push({ field: 'newPassword', message: 'size must be between 12 and 128' })
+      }
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      if (body.currentPassword !== store.password) {
+        return apiError(request, 400, 'the current password is incorrect')
+      }
+      if (body.newPassword === store.password) {
+        return apiError(request, 400, 'the new password must differ from the current one')
+      }
+      store.setPassword(body.newPassword)
+      // Like the backend: every refresh token is revoked, this session's included.
+      issuedRefreshTokens.forEach((token) => usedRefreshTokens.add(token))
+      return new HttpResponse(null, { status: 204 })
     }),
 
     // ---- Owner orders ----
@@ -279,6 +319,39 @@ const REASONS: Record<number, string> = {
   404: 'Not Found',
   409: 'Conflict',
   429: 'Too Many Requests',
+}
+
+/** Region ids (and UTC) only, like the backend: a fixed offset would ignore daylight saving. */
+function isIanaZone(zone: string | undefined): boolean {
+  if (!zone) return false
+  return zone === 'UTC' || Intl.supportedValuesOf('timeZone').includes(zone)
+}
+
+/** The backend's bean validation for OwnerProfileRequest and AddressDto. */
+function validateProfile(body: Schema<'OwnerProfileRequest'>): FieldError[] {
+  const errors: FieldError[] = []
+  const check = (
+    field: string,
+    value: string | null | undefined,
+    max: number,
+    required = false,
+  ) => {
+    if (required && !value?.trim()) errors.push({ field, message: 'must not be blank' })
+    else if ((value ?? '').length > max) {
+      errors.push({ field, message: `size must be between 0 and ${max}` })
+    }
+  }
+  check('businessName', body.businessName, 150, true)
+  check('ownerName', body.ownerName, 150, true)
+  check('phone', body.phone, 30)
+  check('logoUrl', body.logoUrl, 300)
+  check('timeZone', body.timeZone, 64, true)
+  check('address.street', body.address?.street, 200)
+  check('address.city', body.address?.city, 100)
+  check('address.region', body.address?.region, 100)
+  check('address.postalCode', body.address?.postalCode, 20)
+  check('address.country', body.address?.country, 100)
+  return errors
 }
 
 function validateCheckout(body: Schema<'CheckoutRequest'>): FieldError[] {

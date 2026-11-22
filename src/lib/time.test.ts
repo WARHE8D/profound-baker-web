@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'vitest'
-import { formatLocal, formatSlotTime, isValidTimeZone, slotToUtc, todayIn } from './time'
+import {
+  formatLocal,
+  formatSlotTime,
+  formatUtcOffset,
+  isValidTimeZone,
+  slotToUtc,
+  timeZoneGroups,
+  todayIn,
+} from './time'
 
 // Intl puts narrow/no-break spaces in some formats ("10:00 AM"); compare with plain spaces.
 const plain = (s: string) => s.replace(/\s/g, ' ')
@@ -132,4 +140,37 @@ test('todayIn gives the bakery’s date, which can differ from the viewer’s', 
 test('isValidTimeZone', () => {
   expect(isValidTimeZone('Asia/Karachi')).toBe(true)
   expect(isValidTimeZone('Mars/Olympus_Mons')).toBe(false)
+})
+
+test('formatUtcOffset follows daylight saving', () => {
+  expect(formatUtcOffset('America/New_York', new Date('2026-01-15T12:00:00Z'))).toBe('UTC−05:00')
+  expect(formatUtcOffset('America/New_York', new Date('2026-07-15T12:00:00Z'))).toBe('UTC−04:00')
+  expect(formatUtcOffset('Asia/Kolkata', new Date('2026-07-15T12:00:00Z'))).toBe('UTC+05:30')
+  expect(formatUtcOffset('UTC')).toBe('UTC')
+})
+
+test('timeZoneGroups groups zones by region with offsets, UTC under Other', () => {
+  const groups = timeZoneGroups(new Date('2026-01-15T12:00:00Z'))
+  const america = groups.find((g) => g.region === 'America')
+  expect(america?.zones).toContainEqual({
+    value: 'America/New_York',
+    label: 'New York (UTC−05:00)',
+    offsetMinutes: -300,
+  })
+  expect(america?.zones.find((z) => z.value === 'America/Argentina/Salta')?.label).toBe(
+    'Argentina / Salta (UTC−03:00)',
+  )
+  expect(groups.at(-1)?.region).toBe('Other')
+  expect(groups.at(-1)?.zones.map((z) => z.value)).toContain('UTC')
+})
+
+test('timeZoneGroups keeps a saved zone the browser lists under another name', () => {
+  const values = timeZoneGroups(new Date(), ['Asia/Kolkata']).flatMap((g) =>
+    g.zones.map((z) => z.value),
+  )
+  expect(values).toContain('Asia/Kolkata')
+  // Unknown names are not offered.
+  expect(timeZoneGroups(new Date(), ['Mars/Olympus']).flatMap((g) => g.zones)).not.toContainEqual(
+    expect.objectContaining({ value: 'Mars/Olympus' }),
+  )
 })

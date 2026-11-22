@@ -2,7 +2,14 @@
 // check out, open the magic link and cancel. Tests reset it after each test.
 import type { Schema } from '@/api'
 import { slotToUtc, todayIn } from '@/lib/time'
-import { blockedDates, FIXTURE_TIME_ZONE, items, workingHours } from './fixtures'
+import {
+  blockedDates,
+  FIXTURE_OWNER_CREDENTIALS,
+  FIXTURE_TIME_ZONE,
+  items,
+  ownerProfile,
+  workingHours,
+} from './fixtures'
 
 export type StoredOrder = Schema<'OrderResponse'> & {
   /** The guest's magic-link token. The real backend stores only its hash. */
@@ -41,6 +48,8 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   const now = () => fixedNow ?? realNow()
   let orders: StoredOrder[] = []
   let sequence = 0
+  let profile: Schema<'OwnerProfileResponse'> = structuredClone(ownerProfile)
+  let password: string = FIXTURE_OWNER_CREDENTIALS.password
 
   const nextId = (prefix: string) => {
     sequence += 1
@@ -96,6 +105,20 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     },
     get orders(): readonly StoredOrder[] {
       return orders
+    },
+    /** The Owner's profile, as edited through PUT /api/owner/profile. */
+    get profile(): Schema<'OwnerProfileResponse'> {
+      return profile
+    },
+    setProfile(next: Schema<'OwnerProfileResponse'>) {
+      profile = next
+    },
+    /** The Owner's current password (the fixture one until changed). */
+    get password(): string {
+      return password
+    },
+    setPassword(next: string) {
+      password = next
     },
     today: () => todayIn(FIXTURE_TIME_ZONE, now()),
     dayAvailability,
@@ -169,6 +192,8 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       orders = []
       sequence = 0
       fixedNow = null
+      profile = structuredClone(ownerProfile)
+      password = FIXTURE_OWNER_CREDENTIALS.password
     },
   }
 }
