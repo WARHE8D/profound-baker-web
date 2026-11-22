@@ -9,7 +9,7 @@ import {
   FIXTURE_TIME_ZONE,
   items as fixtureItems,
   ownerProfile,
-  workingHours,
+  workingHours as fixtureWorkingHours,
 } from './fixtures'
 
 export type StoredOrder = Schema<'OrderResponse'> & {
@@ -53,6 +53,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   let password: string = FIXTURE_OWNER_CREDENTIALS.password
   let categories: Schema<'CategoryResponse'>[] = structuredClone(fixtureCategories)
   let items: Schema<'ItemResponse'>[] = structuredClone(fixtureItems)
+  let workingHours: Schema<'WorkingHoursResponse'>[] = structuredClone(fixtureWorkingHours)
   /** Uploaded image files by name (`<uuid>`), as the server keeps them on disk. */
   const uploads = new Map<string, { bytes: Uint8Array; type: string }>()
 
@@ -67,7 +68,13 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     const hours = workingHours.find((h) => h.dayOfWeek === weekday)
     const blockedReason = isBlocked(date)
     if (!hours || blockedReason) {
-      return { date, open: false, reason: blockedReason ?? 'Closed on Sundays', slots: [] }
+      return {
+        date,
+        open: false,
+        reason:
+          blockedReason ?? `Closed on ${weekday!.charAt(0)}${weekday!.slice(1).toLowerCase()}s`,
+        slots: [],
+      }
     }
 
     const slots: Schema<'TimeSlotResponse'>[] = []
@@ -117,6 +124,13 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     },
     setProfile(next: Schema<'OwnerProfileResponse'>) {
       profile = next
+    },
+    /** The weekly hours, as set and removed through the owner API (unsorted, like the DB). */
+    get workingHours(): readonly Schema<'WorkingHoursResponse'>[] {
+      return workingHours
+    },
+    setWorkingHours(next: Schema<'WorkingHoursResponse'>[]) {
+      workingHours = next
     },
     /** Categories as created, renamed and deleted through the owner API (unsorted, like the DB). */
     get categories(): readonly Schema<'CategoryResponse'>[] {
@@ -251,6 +265,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       password = FIXTURE_OWNER_CREDENTIALS.password
       categories = structuredClone(fixtureCategories)
       items = structuredClone(fixtureItems)
+      workingHours = structuredClone(fixtureWorkingHours)
       uploads.clear()
     },
   }

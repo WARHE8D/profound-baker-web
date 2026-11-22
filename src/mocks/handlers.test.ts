@@ -339,6 +339,75 @@ test('uploaded image URLs return a placeholder image', async () => {
   expect(await response.text()).toContain('>B</text>')
 })
 
+/** As the API is called with any day name, valid or not. */
+const setHours = (dayOfWeek: string, body: Partial<Schema<'WorkingHoursRequest'>>) =>
+  unwrap(
+    api.PUT('/api/availability/working-hours/{dayOfWeek}', {
+      params: { path: { dayOfWeek: dayOfWeek as Schema<'WorkingHoursResponse'>['dayOfWeek'] } },
+      body: body as Schema<'WorkingHoursRequest'>,
+    }),
+  )
+
+describe('working hours', () => {
+  beforeEach(async () => {
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('lists Monday first, and a day set or removed changes guests’ slots', async () => {
+    const week = await unwrap(api.GET('/api/availability/working-hours'))
+    expect(week.map((h) => h.dayOfWeek)).toEqual([
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY',
+    ])
+
+    const sunday = await setHours('SUNDAY', {
+      startTime: '10:00:00',
+      endTime: '12:00',
+      slotDurationMinutes: 60,
+      maxConcurrentBookings: 3,
+    })
+    expect(sunday).toMatchObject({ dayOfWeek: 'SUNDAY', startTime: '10:00', endTime: '12:00' })
+    expect(await day('2026-11-22')).toMatchObject({ open: true, slots: [{}, {}] })
+
+    await unwrap(
+      api.DELETE('/api/availability/working-hours/{dayOfWeek}', {
+        params: { path: { dayOfWeek: 'MONDAY' } },
+      }),
+    )
+    expect(await day(MONDAY)).toMatchObject({ open: false, reason: 'Closed on Mondays' })
+  })
+
+  test('rejects hours like the server does', async () => {
+    const valid = {
+      startTime: '09:00',
+      endTime: '17:00',
+      slotDurationMinutes: 30,
+      maxConcurrentBookings: 2,
+    }
+    expect(
+      await failure(
+        setHours('MONDAY', { ...valid, slotDurationMinutes: 4, maxConcurrentBookings: 0 }),
+      ),
+    ).toMatchObject({
+      status: 400,
+      fieldErrors: [
+        { field: 'slotDurationMinutes', message: 'must be greater than or equal to 5' },
+        { field: 'maxConcurrentBookings', message: 'must be greater than or equal to 1' },
+      ],
+    })
+    expect(await failure(setHours('MONDAY', { ...valid, endTime: '09:00' }))).toMatchObject({
+      status: 400,
+      message: 'startTime must be before endTime',
+    })
+    expect(await failure(setHours('FUNDAY', valid))).toMatchObject({ status: 400 })
+  })
+})
+
 function uploadPhoto(bytes: Uint8Array) {
   const form = new FormData()
   form.append('file', imageFile(bytes, 'photo.png', 'image/png'))
