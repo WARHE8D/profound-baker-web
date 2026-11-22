@@ -261,6 +261,15 @@ XMLHttpRequest because fetch can't report upload progress (`postMultipart` in
 runs without a percentage there. Tests send uploads with fetch instead, because MSW doesn't intercept
 jsdom's XHR.
 
+### Working hours
+
+Hours are set per day of the week (`PUT /api/availability/working-hours/{DAY}` creates or replaces a
+day; `DELETE` closes it), as local times in the bakery's time zone. The server cuts each open day into
+slots from the opening time, back to back; time before closing too short for a whole slot isn't
+offered. The editor at `/owner/availability` previews those slots with the same rule
+([src/features/availability/working-hours.ts](src/features/availability/working-hours.ts)) and saves
+only the days that changed, one request each, so a rejected day doesn't hold back the others.
+
 ### Order lifecycle
 
 `PENDING` → `CONFIRMED` (or `REJECTED`, with a reason) → `IN_PROGRESS` → `FULFILLED`.

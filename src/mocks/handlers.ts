@@ -338,6 +338,50 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       )
     }),
 
+    // ---- Working hours (owner) ----
+    http.get(api('/api/availability/working-hours'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      return HttpResponse.json(
+        store.workingHours.toSorted(
+          (a, b) => WEEK.indexOf(a.dayOfWeek) - WEEK.indexOf(b.dayOfWeek),
+        ),
+      )
+    }),
+
+    http.put(api('/api/availability/working-hours/:day'), async ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const day = String(params.day) as DayOfWeek
+      if (!WEEK.includes(day)) {
+        return apiError(request, 400, `Failed to convert 'dayOfWeek' with value: '${day}'`)
+      }
+      const body = (await request.json()) as Partial<Schema<'WorkingHoursRequest'>>
+      const errors = validateWorkingHours(body)
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      const startTime = localTime(body.startTime!)
+      const endTime = localTime(body.endTime!)
+      if (startTime === null || endTime === null) {
+        return apiError(request, 400, 'malformed request body')
+      }
+      if (startTime >= endTime) return apiError(request, 400, 'startTime must be before endTime')
+      const existing = store.workingHours.find((h) => h.dayOfWeek === day)
+      const saved: Schema<'WorkingHoursResponse'> = {
+        id: existing?.id ?? crypto.randomUUID(),
+        dayOfWeek: day,
+        startTime,
+        endTime,
+        slotDurationMinutes: body.slotDurationMinutes!,
+        maxConcurrentBookings: body.maxConcurrentBookings!,
+      }
+      store.setWorkingHours([...store.workingHours.filter((h) => h.dayOfWeek !== day), saved])
+      return HttpResponse.json(saved)
+    }),
+
+    http.delete(api('/api/availability/working-hours/:day'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      store.setWorkingHours(store.workingHours.filter((h) => h.dayOfWeek !== String(params.day)))
+      return new HttpResponse(null, { status: 204 })
+    }),
+
     // ---- Availability (public) ----
     http.get(api('/api/public/availability'), ({ request }) => {
       const params = new URL(request.url).searchParams
@@ -567,6 +611,39 @@ function multipartFile(body: Uint8Array, contentType: string | null, name: strin
     start = next
   }
   return null
+}
+
+type DayOfWeek = Schema<'WorkingHoursResponse'>['dayOfWeek']
+const WEEK: DayOfWeek[] = [
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY',
+]
+
+/** A LocalTime as Jackson writes it ("HH:mm", seconds only when set), or null if unreadable. */
+function localTime(text: string): string | null {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(text)
+  if (!match) return null
+  return match[3] && match[3] !== '00' ? text : `${match[1]}:${match[2]}`
+}
+
+/** WorkingHoursRequest's bean validation: @NotNull times, @Min(5) slot, @Min(1) capacity. */
+function validateWorkingHours(body: Partial<Schema<'WorkingHoursRequest'>>): FieldError[] {
+  const errors: FieldError[] = []
+  if (!body.startTime) errors.push({ field: 'startTime', message: 'must not be null' })
+  if (!body.endTime) errors.push({ field: 'endTime', message: 'must not be null' })
+  // A missing int binds as 0, which then fails @Min.
+  if ((body.slotDurationMinutes ?? 0) < 5) {
+    errors.push({ field: 'slotDurationMinutes', message: 'must be greater than or equal to 5' })
+  }
+  if ((body.maxConcurrentBookings ?? 0) < 1) {
+    errors.push({ field: 'maxConcurrentBookings', message: 'must be greater than or equal to 1' })
+  }
+  return errors
 }
 
 const REASONS: Record<number, string> = {
