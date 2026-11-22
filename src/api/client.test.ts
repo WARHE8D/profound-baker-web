@@ -5,11 +5,15 @@ import {
   api,
   fetchWithRateLimitRetry,
   MAX_RATE_LIMIT_WAIT_SECONDS,
+  postMultipart,
   setAccessTokenProvider,
+  setUnauthorizedHandler,
+  setUploadTransport,
   unwrap,
 } from './client'
 import { ApiError, type ApiErrorBody } from './errors'
 import type { Schema } from './types'
+import { fetchTransport } from './upload-transport'
 
 const API = 'http://localhost:8080'
 const CATEGORIES = `${API}/api/public/catalogue/categories`
@@ -174,4 +178,104 @@ test('fetchWithRateLimitRetry leaves a 429 without Retry-After alone', async () 
 
   expect(response.status).toBe(429)
   expect(fetch).toHaveBeenCalledTimes(1)
+})
+
+// ---- Multipart uploads ----
+
+const UPLOAD = `${API}/api/uploads-test`
+
+function uploadForm() {
+  const form = new FormData()
+  form.append('file', new File(['hello'], 'hello.txt', { type: 'text/plain' }))
+  return form
+}
+
+test('postMultipart sends the form with the owner token and resolves to the JSON body', async () => {
+  setAccessTokenProvider(() => 'token-abc')
+  server.use(
+    http.post(UPLOAD, async ({ request }) =>
+      HttpResponse.json({
+        auth: request.headers.get('Authorization'),
+        multipart: request.headers.get('Content-Type')?.startsWith('multipart/form-data;'),
+        body: (await request.text()).includes('hello'),
+      }),
+    ),
+  )
+
+  await expect(postMultipart('/api/uploads-test', uploadForm())).resolves.toEqual({
+    auth: 'Bearer token-abc',
+    multipart: true,
+    body: true,
+  })
+})
+
+test('postMultipart reports progress through the transport', async () => {
+  const progress: number[] = []
+  setUploadTransport(async (request, onProgress) => {
+    onProgress({ loaded: 50, total: 200 })
+    onProgress({ loaded: 200, total: 200 })
+    return fetchTransport(request, () => {})
+  })
+  server.use(http.post(UPLOAD, () => HttpResponse.json({ ok: true })))
+
+  try {
+    await postMultipart('/api/uploads-test', uploadForm(), {
+      onProgress: ({ loaded, total }) => progress.push(loaded / total),
+    })
+  } finally {
+    setUploadTransport(fetchTransport)
+  }
+  expect(progress).toEqual([0.25, 1])
+})
+
+test('postMultipart retries a rejected token once with a fresh one, file included', async () => {
+  setAccessTokenProvider(() => 'stale')
+  setUnauthorizedHandler(async () => 'fresh')
+  const seen: string[] = []
+  server.use(
+    http.post(UPLOAD, async ({ request }) => {
+      const auth = request.headers.get('Authorization') ?? ''
+      seen.push(`${auth} ${(await request.text()).includes('hello')}`)
+      return auth === 'Bearer fresh'
+        ? HttpResponse.json({ ok: true })
+        : HttpResponse.json({}, { status: 401 })
+    }),
+  )
+
+  try {
+    await expect(postMultipart('/api/uploads-test', uploadForm())).resolves.toEqual({ ok: true })
+  } finally {
+    setUnauthorizedHandler(null)
+  }
+  expect(seen).toEqual(['Bearer stale true', 'Bearer fresh true'])
+})
+
+test('postMultipart turns an error response into an ApiError', async () => {
+  const body: ApiErrorBody = {
+    timestamp: '2026-01-01T00:00:00Z',
+    status: 413,
+    error: 'Content Too Large',
+    message: 'Maximum upload size exceeded',
+    path: '/api/uploads-test',
+    fieldErrors: null,
+  }
+  server.use(
+    http.post(UPLOAD, () =>
+      HttpResponse.json(body, { status: 413, headers: { 'X-Request-Id': 'req-9' } }),
+    ),
+  )
+
+  const error = await postMultipart('/api/uploads-test', uploadForm()).catch((e: unknown) => e)
+  expect(error).toBeInstanceOf(ApiError)
+  expect(error).toMatchObject({ status: 413, requestId: 'req-9' })
+})
+
+test('postMultipart rejects with the AbortError when cancelled', async () => {
+  const controller = new AbortController()
+  controller.abort()
+
+  const error = await postMultipart('/api/uploads-test', uploadForm(), {
+    signal: controller.signal,
+  }).catch((e: unknown) => e)
+  expect((error as Error).name).toBe('AbortError')
 })

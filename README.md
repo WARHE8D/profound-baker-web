@@ -249,6 +249,18 @@ the item at the same moment: the editor reloads and re-applies once, then asks t
 Availability has its own `PATCH …/availability`. Items that appear in any order can't be deleted (409),
 only hidden.
 
+### Item photos
+
+Photos go to `POST /api/catalogue/items/{id}/images/upload` as multipart (a `file` part), one at a time
+in the order picked; the server appends each one, and the first photo is the cover. Before sending, the
+editor reads each file's first bytes as the server does: JPEG, PNG or WebP only, at most 10 MB, 10 000 px
+a side and 50 megapixels ([src/lib/image-header.ts](src/lib/image-header.ts)). Uploads use
+XMLHttpRequest because fetch can't report upload progress (`postMultipart` in
+[src/api/client.ts](src/api/client.ts), with the same token refresh and retries as `api`). In
+`npm run dev:mock` the service worker answers uploads, and Chrome reports no progress for those: the bar
+runs without a percentage there. Tests send uploads with fetch instead, because MSW doesn't intercept
+jsdom's XHR.
+
 ### Order lifecycle
 
 `PENDING` → `CONFIRMED` (or `REJECTED`, with a reason) → `IN_PROGRESS` → `FULFILLED`.
