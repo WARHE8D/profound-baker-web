@@ -4,7 +4,7 @@ import { http, HttpResponse, type HttpHandler } from 'msw'
 import type { FieldError, Schema } from '@/api'
 import { apiBaseUrl } from '@/api/config'
 import { addDays } from '@/lib/date'
-import { categories, items, toPublicItem } from './fixtures'
+import { items, toPublicItem } from './fixtures'
 import type { MockStore, StoredOrder } from './store'
 
 const MAX_AVAILABILITY_DAYS = 62
@@ -92,7 +92,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     }),
 
     // ---- Catalogue (public) ----
-    http.get(api('/api/public/catalogue/categories'), () => HttpResponse.json(categories)),
+    http.get(api('/api/public/catalogue/categories'), () => HttpResponse.json(store.categories)),
 
     http.get(api('/api/public/catalogue/items'), ({ request }) => {
       const params = new URL(request.url).searchParams
@@ -103,7 +103,7 @@ export function createHandlers(store: MockStore): HttpHandler[] {
         .filter((i) => !categoryId || i.category.id === categoryId)
         .filter((i) => !search || i.name.toLowerCase().includes(search))
         .toSorted((a, b) => a.name.localeCompare(b.name))
-        .map(toPublicItem)
+        .map((i) => toPublicItem({ ...i, category: store.categoryOf(i) }))
       const page: Schema<'PagePublicItemResponse'> = springPage(visible, params)
       return HttpResponse.json(page)
     }),
@@ -111,7 +111,58 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     http.get(api('/api/public/catalogue/items/:id'), ({ request, params }) => {
       const item = items.find((i) => i.id === params.id && i.available)
       if (!item) return apiError(request, 404, 'item not found')
-      return HttpResponse.json(toPublicItem(item))
+      return HttpResponse.json(toPublicItem({ ...item, category: store.categoryOf(item) }))
+    }),
+
+    // ---- Catalogue (owner): categories ----
+    http.get(api('/api/catalogue/categories'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      return HttpResponse.json(store.categories)
+    }),
+
+    http.post(api('/api/catalogue/categories'), async ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const { name } = (await request.json()) as Schema<'CategoryRequest'>
+      const invalid = validateCategoryName(name)
+      if (invalid) return apiError(request, 400, 'validation failed', [invalid])
+      if (store.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+        return apiError(request, 409, `a category named '${name}' already exists`)
+      }
+      const created = { id: crypto.randomUUID(), name }
+      store.setCategories([...store.categories, created])
+      return HttpResponse.json(created, { status: 201 })
+    }),
+
+    http.put(api('/api/catalogue/categories/:id'), async ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const category = store.categories.find((c) => c.id === params.id)
+      if (!category) return apiError(request, 404, `Category ${String(params.id)} not found`)
+      const { name } = (await request.json()) as Schema<'CategoryRequest'>
+      const invalid = validateCategoryName(name)
+      if (invalid) return apiError(request, 400, 'validation failed', [invalid])
+      const taken = store.categories.some(
+        (c) => c.id !== category.id && c.name.toLowerCase() === name.toLowerCase(),
+      )
+      if (taken) return apiError(request, 409, `a category named '${name}' already exists`)
+      const renamed = { ...category, name }
+      store.setCategories(store.categories.map((c) => (c.id === category.id ? renamed : c)))
+      return HttpResponse.json(renamed)
+    }),
+
+    http.delete(api('/api/catalogue/categories/:id'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const category = store.categories.find((c) => c.id === params.id)
+      if (!category) return apiError(request, 404, `Category ${String(params.id)} not found`)
+      // Like the backend: any item, available or not, keeps its category from being deleted.
+      if (items.some((i) => i.category.id === category.id)) {
+        return apiError(
+          request,
+          409,
+          `cannot delete category '${category.name}': it still has items assigned to it`,
+        )
+      }
+      store.setCategories(store.categories.filter((c) => c.id !== category.id))
+      return new HttpResponse(null, { status: 204 })
     }),
 
     // ---- Availability (public) ----
@@ -319,6 +370,13 @@ const REASONS: Record<number, string> = {
   404: 'Not Found',
   409: 'Conflict',
   429: 'Too Many Requests',
+}
+
+/** CategoryRequest: @NotBlank @Size(max = 100). */
+function validateCategoryName(name: string | undefined): FieldError | null {
+  if (!name?.trim()) return { field: 'name', message: 'must not be blank' }
+  if (name.length > 100) return { field: 'name', message: 'size must be between 0 and 100' }
+  return null
 }
 
 /** Region ids (and UTC) only, like the backend: a fixed offset would ignore daylight saving. */
