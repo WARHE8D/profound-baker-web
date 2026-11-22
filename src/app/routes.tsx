@@ -22,6 +22,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 
 /** Owner pages that exist, by their path under /owner; the rest of the nav shows "coming soon". */
 const ownerPages: Record<string, RouteObject['lazy']> = {
+  items: async () => ({ Component: (await import('@/features/items/ItemsPage')).ItemsPage }),
   categories: async () => ({
     Component: (await import('@/features/categories/CategoriesPage')).CategoriesPage,
   }),
@@ -94,6 +95,18 @@ export const routes: RouteObject[] = [
       {
         ErrorBoundary: RouteErrorBoundary,
         children: [
+          {
+            path: 'items/new',
+            lazy: async () => ({
+              Component: (await import('@/features/items/ItemEditorPage')).ItemEditorPage,
+            }),
+          },
+          {
+            path: 'items/:itemId',
+            lazy: async () => ({
+              Component: (await import('@/features/items/ItemEditorPage')).ItemEditorPage,
+            }),
+          },
           ...ownerNav.map(({ path, label, sprint }): RouteObject => {
             const built = ownerPages[path]
             if (built) return { path, lazy: built }

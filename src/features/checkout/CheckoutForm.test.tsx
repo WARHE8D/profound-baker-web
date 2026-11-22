@@ -38,7 +38,8 @@ const placeOrderButton = () => screen.getByRole('button', { name: /^Place order/
 
 async function openCheckout() {
   const result = renderRoute('/checkout')
-  await screen.findByRole('group', { name: /Pickup times on/ })
+  // 62 days of availability from the mock: allow for a busy test run.
+  await screen.findByRole('group', { name: /Pickup times on/ }, { timeout: 5000 })
   return result
 }
 

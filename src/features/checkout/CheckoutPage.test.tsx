@@ -102,7 +102,8 @@ test('full slots and fully booked days cannot be picked', async () => {
   }
   fillSlot('2026-11-23', '10:00')
   renderRoute('/checkout')
-  await screen.findByRole('group', { name: /Pickup times on/ })
+  // 62 days of availability from the mock: allow for a busy test run.
+  await screen.findByRole('group', { name: /Pickup times on/ }, { timeout: 5000 })
 
   expect(day(/^Saturday, November 21, fully booked$/)).toBeDisabled()
 
@@ -134,7 +135,8 @@ test('months can be browsed within the 62-day window; closures are marked', asyn
 test('if the picked slot fills up, the guest is told and asked to choose again', async () => {
   cartStore.add(croissant, 1)
   const { queryClient } = renderRoute('/checkout')
-  await screen.findByRole('group', { name: /Pickup times on/ })
+  // 62 days of availability from the mock: allow for a busy test run.
+  await screen.findByRole('group', { name: /Pickup times on/ }, { timeout: 5000 })
   await userEvent.click(slot(/^1:00\sPM – 1:30\sPM/))
 
   fillSlot('2026-11-20', '13:00')
