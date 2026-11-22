@@ -52,6 +52,13 @@ export const routes: RouteObject[] = [
               Component: (await import('@/features/checkout/ConfirmationPage')).ConfirmationPage,
             }),
           },
+          // The guest's order, from the magic link in the confirmation page.
+          {
+            path: 'orders/:token',
+            lazy: async () => ({
+              Component: (await import('@/features/orders/GuestOrderPage')).GuestOrderPage,
+            }),
+          },
           ...devRoutes,
           { path: '*', Component: NotFoundPage },
         ],
