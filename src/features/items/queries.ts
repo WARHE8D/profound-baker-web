@@ -1,5 +1,13 @@
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, isApiError, readPage, unwrap, type Schema } from '@/api'
+import {
+  api,
+  isApiError,
+  postMultipart,
+  readPage,
+  unwrap,
+  type Schema,
+  type UploadProgress,
+} from '@/api'
 import { catalogueKeys } from '@/features/catalogue/queries'
 import {
   mergeEdits,
@@ -153,6 +161,53 @@ export function useSetAvailability() {
   return useMutation({
     mutationFn: ({ id, available }: { id: string; available: boolean }) =>
       setAvailability(id, available),
+    onSuccess: (item) => refresh(item),
+  })
+}
+
+export type UploadImageVariables = {
+  file: File
+  onProgress?: (progress: UploadProgress) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Adds one photo to the item (the server appends it: the first photo stays the cover). A 409 means
+ * another write hit the item at that moment (an order, another tab): send it once more.
+ */
+export function useUploadImage(itemId: string) {
+  const refresh = useRefreshItems()
+  return useMutation({
+    mutationFn: async ({ file, onProgress, signal }: UploadImageVariables) => {
+      for (let attempt = 1; ; attempt += 1) {
+        const form = new FormData()
+        form.append('file', file)
+        try {
+          return await postMultipart<Item>(
+            `/api/catalogue/items/${encodeURIComponent(itemId)}/images/upload`,
+            form,
+            { onProgress, signal },
+          )
+        } catch (error) {
+          if (attempt < 2 && isConcurrencyConflict(error)) continue
+          throw error
+        }
+      }
+    },
+    onSuccess: (item) => refresh(item),
+  })
+}
+
+/** Detaches a photo; the server deletes the file once nothing else shows it. */
+export function useRemoveImage(itemId: string) {
+  const refresh = useRefreshItems()
+  return useMutation({
+    mutationFn: (url: string) =>
+      unwrap(
+        api.DELETE('/api/catalogue/items/{id}/images', {
+          params: { path: { id: itemId }, query: { url } },
+        }),
+      ),
     onSuccess: (item) => refresh(item),
   })
 }

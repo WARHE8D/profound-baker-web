@@ -1,13 +1,18 @@
 // MSW handlers that mirror profound-baker-server closely enough to build and test the SPA without
 // it: same paths, same JSON shapes (typed from the spec), same ApiError bodies and status codes.
-import { http, HttpResponse, type HttpHandler } from 'msw'
+import { delay, http, HttpResponse, type HttpHandler } from 'msw'
 import type { FieldError, Schema } from '@/api'
 import { apiBaseUrl } from '@/api/config'
 import { addDays } from '@/lib/date'
+import { readImageHeader } from '@/lib/image-header'
 import { toPublicItem } from './fixtures'
 import type { MockStore, StoredOrder } from './store'
 
 const MAX_AVAILABILITY_DAYS = 62
+/** spring.servlet.multipart.max-request-size, and the server's ImageProcessor limits. */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const MAX_IMAGE_SIDE = 10_000
+const MAX_IMAGE_PIXELS = 50_000_000
 const ACCESS_TOKEN_SECONDS = 15 * 60
 
 const api = (path: string) => `${apiBaseUrl}${path}`
@@ -277,6 +282,62 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       return new HttpResponse(null, { status: 204 })
     }),
 
+    http.post(api('/api/catalogue/items/:id/images/upload'), async ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const item = store.findItem(String(params.id))
+      if (!item) return apiError(request, 404, `Item ${String(params.id)} not found`)
+      const body = new Uint8Array(await request.arrayBuffer())
+      if (body.length > MAX_UPLOAD_BYTES) {
+        return apiError(request, 413, 'Maximum upload size exceeded')
+      }
+      const file = multipartFile(body, request.headers.get('Content-Type'), 'file')
+      if (!file) return apiError(request, 400, "Required part 'file' is not present.")
+      if (file.length === 0) return apiError(request, 400, 'file is required')
+      const header = readImageHeader(file)
+      if (!header) return apiError(request, 400, 'not a PNG, JPEG or WebP image')
+      if (!header.size) return apiError(request, 400, 'the image could not be read')
+      const { width, height } = header.size
+      if (width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE || width * height > MAX_IMAGE_PIXELS) {
+        return apiError(
+          request,
+          400,
+          `image is too large (${width} x ${height} px); at most ${MAX_IMAGE_SIDE} px a side`,
+        )
+      }
+      // The server decodes, scales and re-encodes: not instant.
+      await delay()
+      const stored = store.storeUpload(file, header.format)
+      const current = store.findItem(item.id) ?? item
+      return HttpResponse.json(
+        store.saveItem({
+          ...current,
+          category: store.categoryOf(current),
+          imageUrls: [...current.imageUrls, stored.url],
+          thumbnailUrls: [...current.thumbnailUrls, stored.thumbnailUrl],
+        }),
+      )
+    }),
+
+    http.delete(api('/api/catalogue/items/:id/images'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const item = store.findItem(String(params.id))
+      if (!item) return apiError(request, 404, `Item ${String(params.id)} not found`)
+      const url = new URL(request.url).searchParams.get('url')
+      if (url === null) return apiError(request, 400, "Required parameter 'url' is not present.")
+      const index = item.imageUrls.indexOf(url)
+      // Like the server: a URL the item doesn't hold changes nothing.
+      if (index === -1) return HttpResponse.json({ ...item, category: store.categoryOf(item) })
+      store.deleteUpload(url)
+      return HttpResponse.json(
+        store.saveItem({
+          ...item,
+          category: store.categoryOf(item),
+          imageUrls: item.imageUrls.filter((_, i) => i !== index),
+          thumbnailUrls: item.thumbnailUrls.filter((_, i) => i !== index),
+        }),
+      )
+    }),
+
     // ---- Availability (public) ----
     http.get(api('/api/public/availability'), ({ request }) => {
       const params = new URL(request.url).searchParams
@@ -466,6 +527,12 @@ export function createHandlers(store: MockStore): HttpHandler[] {
 
     // ---- Uploaded images: a generated placeholder per item ----
     http.get(`${apiBaseUrl}/uploads/items/:file`, ({ params }) => {
+      const upload = store.findUpload(String(params.file))
+      if (upload) {
+        return new HttpResponse(upload.bytes as BodyInit, {
+          headers: { 'Content-Type': upload.type, 'Cache-Control': 'max-age=3600' },
+        })
+      }
       const id = String(params.file).replace(/(-thumb)?\.\w+$/, '')
       const item = store.findItem(id)
       return new HttpResponse(placeholderSvg(item?.name ?? '?'), {
@@ -475,12 +542,40 @@ export function createHandlers(store: MockStore): HttpHandler[] {
   ]
 }
 
+/**
+ * The bytes of one file part of a multipart/form-data body. Parsed by hand: in tests (jsdom) the
+ * Request's own formData() trips over jsdom's File class.
+ */
+function multipartFile(body: Uint8Array, contentType: string | null, name: string) {
+  const boundary = /boundary="?([^";]+)"?/i.exec(contentType ?? '')?.[1]
+  if (!boundary) return null
+  // latin1 maps every byte to one character, so string offsets are byte offsets.
+  const text = new TextDecoder('latin1').decode(body)
+  const delimiter = `--${boundary}`
+  let start = text.indexOf(delimiter)
+  while (start !== -1) {
+    const next = text.indexOf(delimiter, start + delimiter.length)
+    if (next === -1) break
+    const headersEnd = text.indexOf('\r\n\r\n', start)
+    if (headersEnd !== -1 && headersEnd < next) {
+      const headers = text.slice(start, headersEnd)
+      if (new RegExp(`name="${name}"`).test(headers)) {
+        // The part ends with the CRLF in front of the next delimiter.
+        return body.slice(headersEnd + 4, next - 2)
+      }
+    }
+    start = next
+  }
+  return null
+}
+
 const REASONS: Record<number, string> = {
   400: 'Bad Request',
   401: 'Unauthorized',
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+  413: 'Content Too Large',
   429: 'Too Many Requests',
 }
 

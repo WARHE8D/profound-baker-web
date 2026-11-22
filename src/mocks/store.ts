@@ -53,6 +53,8 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   let password: string = FIXTURE_OWNER_CREDENTIALS.password
   let categories: Schema<'CategoryResponse'>[] = structuredClone(fixtureCategories)
   let items: Schema<'ItemResponse'>[] = structuredClone(fixtureItems)
+  /** Uploaded image files by name (`<uuid>`), as the server keeps them on disk. */
+  const uploads = new Map<string, { bytes: Uint8Array; type: string }>()
 
   const nextId = (prefix: string) => {
     sequence += 1
@@ -142,6 +144,22 @@ export function createMockStore(options: { now?: () => Date } = {}) {
         ? items.map((i) => (i.id === saved.id ? saved : i))
         : [...items, saved]
       return saved
+    },
+    /** Keeps an uploaded image; returns its URL and its thumbnail's, named like the server's. */
+    storeUpload(bytes: Uint8Array, format: 'png' | 'jpeg' | 'webp') {
+      const name = crypto.randomUUID()
+      uploads.set(name, { bytes, type: `image/${format}` })
+      // Like the server: a PNG stays PNG, JPEG and WebP are re-encoded as JPEG.
+      const extension = format === 'png' ? 'png' : 'jpg'
+      return {
+        url: `/uploads/items/${name}.${extension}`,
+        thumbnailUrl: `/uploads/items/${name}.thumb.${extension}`,
+      }
+    },
+    /** An uploaded file by its file name (the image's or its thumbnail's). */
+    findUpload: (fileName: string) => uploads.get(fileName.replace(/(\.thumb)?\.\w+$/, '')),
+    deleteUpload(url: string) {
+      uploads.delete(url.replace(/^.*\//, '').replace(/\.\w+$/, ''))
     },
     /** Whether any order (cancelled ones included) has a line for the item. */
     hasOrderHistory: (itemId: string) =>
@@ -233,6 +251,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       password = FIXTURE_OWNER_CREDENTIALS.password
       categories = structuredClone(fixtureCategories)
       items = structuredClone(fixtureItems)
+      uploads.clear()
     },
   }
 }

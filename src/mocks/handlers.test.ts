@@ -1,8 +1,17 @@
 // The default MSW handlers, exercised through the real API client, so tests and `npm run dev:mock`
 // can rely on them behaving like profound-baker-server.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { api, ApiError, readPage, setAccessTokenProvider, unwrap, type Schema } from '@/api'
+import {
+  api,
+  ApiError,
+  postMultipart,
+  readPage,
+  setAccessTokenProvider,
+  unwrap,
+  type Schema,
+} from '@/api'
 import { slotToUtc } from '@/lib/time'
+import { imageFile, pngBytes } from '@/test/images'
 import { mockStore } from '@/test/msw/handlers'
 import { FIXTURE_OWNER_CREDENTIALS, FIXTURE_TIME_ZONE, ids } from './fixtures'
 
@@ -328,6 +337,66 @@ test('uploaded image URLs return a placeholder image', async () => {
   )
   expect(response.headers.get('Content-Type')).toBe('image/svg+xml')
   expect(await response.text()).toContain('>B</text>')
+})
+
+function uploadPhoto(bytes: Uint8Array) {
+  const form = new FormData()
+  form.append('file', imageFile(bytes, 'photo.png', 'image/png'))
+  return postMultipart<Schema<'ItemResponse'>>(
+    `/api/catalogue/items/${ids.items.baguette}/images/upload`,
+    form,
+  )
+}
+
+const removePhoto = (url: string) =>
+  unwrap(
+    api.DELETE('/api/catalogue/items/{id}/images', {
+      params: { path: { id: ids.items.baguette }, query: { url } },
+    }),
+  )
+
+describe('item photos', () => {
+  beforeEach(async () => {
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('an upload is appended and served back, like the server stores it', async () => {
+    const bytes = pngBytes(800, 600)
+
+    const item = await uploadPhoto(bytes)
+
+    expect(item.imageUrls).toHaveLength(2)
+    const [, url] = item.imageUrls
+    const [, thumbnail] = item.thumbnailUrls
+    expect(url).toMatch(/^\/uploads\/items\/[0-9a-f-]{36}\.png$/)
+    expect(thumbnail).toBe(url!.replace('.png', '.thumb.png'))
+    const served = await fetch(`http://localhost:8080${thumbnail}`)
+    expect(served.headers.get('Content-Type')).toBe('image/png')
+    expect(new Uint8Array(await served.arrayBuffer())).toEqual(bytes)
+  })
+
+  test('the bytes decide what an upload is, and how large it may be', async () => {
+    expect(await failure(uploadPhoto(new TextEncoder().encode('GIF89a')))).toMatchObject({
+      status: 400,
+      message: 'not a PNG, JPEG or WebP image',
+    })
+    expect(await failure(uploadPhoto(pngBytes(10_001, 10)))).toMatchObject({
+      status: 400,
+      message: 'image is too large (10001 x 10 px); at most 10000 px a side',
+    })
+    expect(await failure(uploadPhoto(new Uint8Array(10 * 1024 * 1024 + 1)))).toMatchObject({
+      status: 413,
+    })
+    expect(mockStore.findItem(ids.items.baguette)?.imageUrls).toHaveLength(1)
+  })
+
+  test('removing a photo detaches it and its thumbnail', async () => {
+    const [url] = mockStore.findItem(ids.items.baguette)!.imageUrls
+    expect(await removePhoto(url!)).toMatchObject({ imageUrls: [], thumbnailUrls: [] })
+    // A URL the item doesn't hold changes nothing.
+    expect(await removePhoto('/uploads/items/other.jpg')).toMatchObject({ imageUrls: [] })
+  })
 })
 
 test('reset clears orders and unfreezes the clock', async () => {

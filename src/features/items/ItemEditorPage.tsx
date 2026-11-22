@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link, useBlocker, useNavigate, useParams } from 'react-router'
 import { isApiError } from '@/api'
@@ -38,6 +38,7 @@ import {
   type ItemFormValues,
   type ItemStateKey,
 } from './item-form'
+import { ItemPhotos } from './ItemPhotos'
 import {
   isConcurrencyConflict,
   ownerItemQuery,
@@ -138,6 +139,8 @@ function ItemForm({ item, categories }: { item: Item | null; categories: readonl
   const { errors, isDirty, isSubmitSuccessful } = formState
   const [trackStock, leadTime] = useWatch({ control, name: ['trackStock', 'leadTimeHours'] })
   const saving = create.isPending || update.isPending
+  const [photosBusy, setPhotosBusy] = useState(false)
+  const onPhotosBusyChange = useCallback((busy: boolean) => setPhotosBusy(busy), [])
 
   // The server's copy changed (a refetch, another tab) while nothing is being edited: show it.
   useEffect(() => {
@@ -146,14 +149,16 @@ function ItemForm({ item, categories }: { item: Item | null; categories: readonl
     form.reset(toItemForm(item))
   }, [item, isDirty, saving, form])
 
-  // Leaving with unsaved edits asks first (in-app navigation and closing the tab).
-  const blocker = useBlocker(isDirty && !isSubmitSuccessful && !saving)
+  // Leaving with unsaved edits, or photos still uploading, asks first (in-app navigation and
+  // closing the tab).
+  const unsaved = isDirty && !isSubmitSuccessful && !saving
+  const blocker = useBlocker(unsaved || photosBusy)
   useEffect(() => {
-    if (!isDirty) return
+    if (!isDirty && !photosBusy) return
     const warn = (event: BeforeUnloadEvent) => event.preventDefault()
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [isDirty])
+  }, [isDirty, photosBusy])
 
   async function submit(values: ItemFormValues) {
     setProblem(null)
@@ -318,18 +323,32 @@ function ItemForm({ item, categories }: { item: Item | null; categories: readonl
         </div>
       </form>
 
+      {item ? (
+        <ItemPhotos item={item} onBusyChange={onPhotosBusyChange} />
+      ) : (
+        <section className="rounded-card border border-dashed border-border p-5 text-sm text-muted sm:p-6">
+          <h2 className="mb-1 text-lg font-semibold text-text">Photos</h2>
+          Add the item first; then you can add its photos here.
+        </section>
+      )}
+
       <Dialog
         open={blocker.state === 'blocked'}
         onClose={() => blocker.reset?.()}
-        title="Leave without saving?"
-        description="Your changes to this item will be lost."
+        title={photosBusy && !unsaved ? 'Leave before the photos finish?' : 'Leave without saving?'}
+        description={[
+          unsaved && 'Your changes to this item will be lost.',
+          photosBusy && "Photos that haven't finished uploading won't be added.",
+        ]
+          .filter(Boolean)
+          .join(' ')}
         footer={
           <>
             <Button variant="secondary" onClick={() => blocker.reset?.()}>
-              Keep editing
+              {unsaved ? 'Keep editing' : 'Stay'}
             </Button>
             <Button variant="danger" onClick={() => blocker.proceed?.()}>
-              Discard changes
+              {unsaved ? 'Discard changes' : 'Leave anyway'}
             </Button>
           </>
         }

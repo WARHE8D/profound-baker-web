@@ -2,6 +2,8 @@ import createClient, { type Middleware } from 'openapi-fetch'
 import { apiBaseUrl } from './config'
 import { ApiError, parseRetryAfter } from './errors'
 import type { paths } from './types'
+import { xhrTransport, type UploadProgress, type UploadTransport } from './upload-transport'
+import { joinUrl } from './url'
 
 /** Longest Retry-After we wait out silently; longer waits surface as an ApiError with the wait. */
 export const MAX_RATE_LIMIT_WAIT_SECONDS = 10
@@ -112,6 +114,55 @@ export const api = createClient<paths>({
   fetch: (request) => fetchWithAuthRetry(request),
 })
 api.use(authMiddleware)
+
+let uploadTransport: UploadTransport = xhrTransport
+
+/** Tests send uploads with fetch, which MSW intercepts (see upload-transport.ts). */
+export function setUploadTransport(transport: UploadTransport): void {
+  uploadTransport = transport
+}
+
+async function readBody(response: Response): Promise<unknown> {
+  const text = await response.text()
+  if (!text) return undefined
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return text
+  }
+}
+
+/**
+ * POSTs a multipart form and reports upload progress, which openapi-fetch (fetch) can't. Same rules
+ * as `api`: the Owner's access token, one retry with a fresh token on 401 and one wait on a short
+ * 429. Resolves to the JSON body; throws an {@link ApiError} like {@link unwrap}.
+ */
+export async function postMultipart<T>(
+  path: string,
+  form: FormData,
+  options: { onProgress?: (progress: UploadProgress) => void; signal?: AbortSignal } = {},
+): Promise<T> {
+  const onProgress = options.onProgress ?? (() => {})
+  const token = await accessTokenProvider()
+  const request = new Request(joinUrl(apiBaseUrl, path), {
+    method: 'POST',
+    body: form,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: options.signal,
+  })
+  let response: Response
+  try {
+    response = await fetchWithAuthRetry(request, (r) =>
+      fetchWithRateLimitRetry(r, { fetch: (attempt) => uploadTransport(attempt, onProgress) }),
+    )
+  } catch (error) {
+    if ((error as { name?: unknown } | null)?.name === 'AbortError') throw error
+    throw ApiError.network(error)
+  }
+  const body = await readBody(response)
+  if (!response.ok) throw ApiError.fromResponse(response, body)
+  return body as T
+}
 
 type ApiResult = { data?: unknown; error?: unknown; response: Response }
 type SuccessData<R> = R extends { data: infer D } ? D : never
