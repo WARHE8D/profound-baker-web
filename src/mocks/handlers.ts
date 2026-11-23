@@ -5,7 +5,8 @@ import type { FieldError, Schema } from '@/api'
 import { apiBaseUrl } from '@/api/config'
 import { addDays } from '@/lib/date'
 import { readImageHeader } from '@/lib/image-header'
-import { toPublicItem } from './fixtures'
+import { todayIn } from '@/lib/time'
+import { FIXTURE_TIME_ZONE, toPublicItem } from './fixtures'
 import type { MockStore, StoredOrder } from './store'
 
 const MAX_AVAILABILITY_DAYS = 62
@@ -22,6 +23,12 @@ const isOwner = (request: Request) =>
   (request.headers.get('Authorization') ?? '').startsWith('Bearer mock-access-')
 
 /** The owner's view of an order: everything except the guest's magic-link token. */
+/** OrderProperties' defaults: distinct items per order, and units of one item. */
+const MAX_ORDER_LINES = 20
+const MAX_LINE_QUANTITY = 100
+/** Statuses an order can still be rescheduled in. */
+const OPEN_STATUSES: StoredOrder['status'][] = ['PENDING', 'CONFIRMED', 'IN_PROGRESS']
+
 const ownerView = ({ accessToken: _token, ...order }: StoredOrder): Schema<'OrderResponse'> => order
 
 export function createHandlers(store: MockStore): HttpHandler[] {
@@ -72,6 +79,37 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       status,
       headers: { 'X-Request-Id': `mock-${String(requestCount).padStart(6, '0')}` },
     })
+  }
+
+  /** Runs `handle` on the order in the path, after the Owner and 404 checks every route makes. */
+  function withOrder(
+    request: Request,
+    params: Record<string, unknown>,
+    handle: (order: StoredOrder) => Response,
+  ) {
+    if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+    const order = store.findById(String(params.id))
+    if (!order) return apiError(request, 404, `Order not found: ${String(params.id)}`)
+    return handle(order)
+  }
+
+  /** Order's guard: "cannot confirm an order in status CANCELLED". */
+  const wrongStatus = (request: Request, action: string, order: StoredOrder) =>
+    apiError(request, 400, `cannot ${action} an order in status ${order.status}`)
+
+  /** RejectRequest and CancelRequest's bean validation: at most 300 characters; rejects need one. */
+  function checkReason(request: Request, reason: string | undefined, required: boolean) {
+    if (required && reason == null) {
+      return apiError(request, 400, 'validation failed', [
+        { field: 'reason', message: 'must not be null' },
+      ])
+    }
+    if ((reason ?? '').length > 300) {
+      return apiError(request, 400, 'validation failed', [
+        { field: 'reason', message: 'size must be between 0 and 300' },
+      ])
+    }
+    return null
   }
 
   function issueTokens(): Schema<'TokenResponse'> {
@@ -648,6 +686,196 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       const order = store.findById(String(params.id))
       if (!order) return apiError(request, 404, 'order not found')
       return HttpResponse.json(ownerView(order))
+    }),
+
+    // Transitions, guarded like Order's state machine: a wrong status is a 400, as the server's
+    // IllegalStateException; a concurrent write would be a 409, which tests stage themselves.
+    http.patch(api('/api/orders/:id/confirm'), ({ request, params }) =>
+      withOrder(request, params, (order) => {
+        if (order.status !== 'PENDING') return wrongStatus(request, 'confirm', order)
+        const confirmed = store.updateOrder(order, { status: 'CONFIRMED' })
+        store.issueInvoice(confirmed)
+        return HttpResponse.json(ownerView(confirmed))
+      }),
+    ),
+
+    http.patch(api('/api/orders/:id/reject'), async ({ request, params }) => {
+      const body = (await request.json().catch(() => ({}))) as Partial<Schema<'RejectRequest'>>
+      const invalid = checkReason(request, body.reason, true)
+      if (invalid) return invalid
+      return withOrder(request, params, (order) => {
+        if (order.status !== 'PENDING') return wrongStatus(request, 'reject', order)
+        if (!body.reason?.trim()) return apiError(request, 400, 'a rejection needs a reason')
+        const rejected = store.updateOrder(order, {
+          status: 'REJECTED',
+          rejectionReason: body.reason.trim(),
+        })
+        return HttpResponse.json(ownerView(rejected))
+      })
+    }),
+
+    http.patch(api('/api/orders/:id/start-preparation'), ({ request, params }) =>
+      withOrder(request, params, (order) => {
+        if (order.status !== 'CONFIRMED') return wrongStatus(request, 'start preparation on', order)
+        return HttpResponse.json(ownerView(store.updateOrder(order, { status: 'IN_PROGRESS' })))
+      }),
+    ),
+
+    http.patch(api('/api/orders/:id/fulfill'), ({ request, params }) =>
+      withOrder(request, params, (order) => {
+        if (order.status !== 'CONFIRMED' && order.status !== 'IN_PROGRESS') {
+          return wrongStatus(request, 'fulfill', order)
+        }
+        return HttpResponse.json(ownerView(store.updateOrder(order, { status: 'FULFILLED' })))
+      }),
+    ),
+
+    http.patch(api('/api/orders/:id/cancel'), async ({ request, params }) => {
+      const body = (await request.json().catch(() => ({}))) as Schema<'CancelRequest'>
+      const invalid = checkReason(request, body.reason, false)
+      if (invalid) return invalid
+      return withOrder(request, params, (order) => {
+        if (order.status === 'PENDING') {
+          return apiError(request, 400, 'a pending order is rejected, not cancelled')
+        }
+        if (order.status !== 'CONFIRMED' && order.status !== 'IN_PROGRESS') {
+          return wrongStatus(request, 'cancel', order)
+        }
+        const cancelled = store.updateOrder(order, {
+          status: 'CANCELLED',
+          cancellationReason: body.reason ?? null,
+        })
+        store.voidInvoice(order.id)
+        return HttpResponse.json(ownerView(cancelled))
+      })
+    }),
+
+    http.put(api('/api/orders/:id/schedule'), async ({ request, params }) => {
+      const body = (await request.json()) as Partial<Schema<'RescheduleRequest'>>
+      const pickupAt = body.pickupAt ?? ''
+      if (Number.isNaN(Date.parse(pickupAt))) {
+        return apiError(request, 400, 'validation failed', [
+          { field: 'pickupAt', message: 'must not be null' },
+        ])
+      }
+      if (Date.parse(pickupAt) <= store.now().getTime()) {
+        return apiError(request, 400, 'validation failed', [
+          { field: 'pickupAt', message: 'must be a future date' },
+        ])
+      }
+      return withOrder(request, params, (order) => {
+        // Like OrderService: the slot is checked before the status. The Owner may waive lead time.
+        const date = todayIn(FIXTURE_TIME_ZONE, new Date(pickupAt))
+        const day = store.dayAvailability(date, order.id)
+        if (!day.open) {
+          const suffix = day.reason ? ` (${day.reason})` : ''
+          return apiError(request, 409, `not open for orders on ${date}${suffix}`)
+        }
+        const minute = Math.floor(Date.parse(pickupAt) / 60_000) * 60_000
+        const slot = day.slots.find((s) => Date.parse(s.startsAt) === minute && s.bookable)
+        if (!slot) {
+          return apiError(
+            request,
+            409,
+            'the requested time is not an available pickup slot \u2014 check GET /api/public/availability first',
+          )
+        }
+        if (!OPEN_STATUSES.includes(order.status)) {
+          return wrongStatus(request, 'reschedule', order)
+        }
+        return HttpResponse.json(ownerView(store.updateOrder(order, { pickupAt: slot.startsAt })))
+      })
+    }),
+
+    http.put(api('/api/orders/:id/lines'), async ({ request, params }) => {
+      const body = (await request.json()) as Partial<Schema<'EditLinesRequest'>>
+      const lines = body.lines ?? []
+      const errors: FieldError[] = []
+      if (lines.length === 0) errors.push({ field: 'lines', message: 'must not be empty' })
+      lines.forEach((line, index) => {
+        if (!line.itemId) {
+          errors.push({ field: `lines[${index}].itemId`, message: 'must not be null' })
+        }
+        if ((line.quantity ?? 0) < 1) {
+          errors.push({
+            field: `lines[${index}].quantity`,
+            message: 'must be greater than or equal to 1',
+          })
+        }
+      })
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      if (lines.length > MAX_ORDER_LINES) {
+        return apiError(
+          request,
+          400,
+          `an order may contain at most ${MAX_ORDER_LINES} different items`,
+        )
+      }
+      const tooMany = lines.findIndex((l) => (l.quantity ?? 0) > MAX_LINE_QUANTITY)
+      if (tooMany !== -1) {
+        return apiError(
+          request,
+          400,
+          `line ${tooMany + 1}: at most ${MAX_LINE_QUANTITY} of one item per order`,
+        )
+      }
+      return withOrder(request, params, (order) => {
+        if (order.status !== 'PENDING') return wrongStatus(request, 'edit the lines of', order)
+        if (new Set(lines.map((l) => l.itemId)).size !== lines.length) {
+          return apiError(request, 400, 'each item may appear only once in an order')
+        }
+        let nextLineNo = Math.max(0, ...order.lines.map((l) => l.lineNo)) + 1
+        const edited: Schema<'OrderLineResponse'>[] = []
+        for (const line of lines) {
+          const quantity = line.quantity!
+          const existing = order.lines.find((l) => l.itemId === line.itemId)
+          const item = store.findItem(line.itemId)
+          if (!existing && !item) return apiError(request, 404, `Item not found: ${line.itemId}`)
+          if (!existing && !item!.orderable) {
+            return apiError(request, 409, `item '${item!.name}' is not currently available`)
+          }
+          // Stock moves by the difference only.
+          const extra = quantity - (existing?.quantity ?? 0)
+          if (item && item.stockQuantity !== null && extra > item.stockQuantity) {
+            return apiError(request, 400, `not enough stock for '${item.name}'`)
+          }
+          // An item already on the order keeps the name and price the guest saw.
+          const unitPrice = existing ? existing.unitPrice : item!.price
+          edited.push({
+            lineNo: existing ? existing.lineNo : nextLineNo++,
+            itemId: line.itemId,
+            itemName: existing ? existing.itemName : item!.name,
+            unitPrice,
+            quantity,
+            lineTotal: Math.round(unitPrice * 100 * quantity) / 100,
+          })
+        }
+        edited.sort((a, b) => a.lineNo - b.lineNo)
+        return HttpResponse.json(ownerView(store.updateOrder(order, { lines: edited })))
+      })
+    }),
+
+    http.put(api('/api/orders/:id/notes'), async ({ request, params }) => {
+      const body = (await request.json()) as Schema<'NotesRequest'>
+      if ((body.notes ?? '').length > 1000) {
+        return apiError(request, 400, 'validation failed', [
+          { field: 'notes', message: 'size must be between 0 and 1000' },
+        ])
+      }
+      return withOrder(request, params, (order) => {
+        if (order.status !== 'PENDING') return wrongStatus(request, 'edit the notes of', order)
+        const notes = body.notes?.trim() ? body.notes.trim() : null
+        return HttpResponse.json(ownerView(store.updateOrder(order, { notes })))
+      })
+    }),
+
+    http.get(api('/api/orders/:orderId/invoice'), ({ request, params }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const invoice = store.invoiceForOrder(String(params.orderId))
+      if (!invoice) {
+        return apiError(request, 404, `Invoice not found for order: ${String(params.orderId)}`)
+      }
+      return HttpResponse.json(invoice)
     }),
 
     // ---- Uploaded images: a generated placeholder per item ----

@@ -287,6 +287,16 @@ navigation shows how many are pending. Its filters (status, pickup dates, search
 URL. `npm run dev:mock` starts with demo orders ([src/mocks/demo-orders.ts](src/mocks/demo-orders.ts)),
 placed relative to the current time; tests start with none.
 
+An order's page (`/owner/orders/:id`) offers only the moves its status allows: confirm or reject
+(with a reason the guest sees) while pending; start preparation, mark picked up or cancel once
+confirmed. Lines and notes can be edited while pending; the pickup can be moved to any free slot
+until the order is over (the Owner may waive the items' lead time). The server answers a move from the
+wrong status with **400** and a write that collided with another with **409**: both usually mean
+someone else changed the order, so the page reloads it and says so. Lines, notes and pickup replace
+what the Owner saw, so the page checks the order is unchanged before sending them
+([src/features/orders/order-actions.ts](src/features/orders/order-actions.ts)). The API keeps no
+status history, so the progress shown is derived from the current status and timestamps.
+
 ### Errors
 
 Every error has the same JSON body:

@@ -39,6 +39,8 @@ export default defineConfig({
     // .env.local is not loaded in test mode; give the API client a fixed origin for MSW handlers.
     env: { VITE_API_BASE_URL: 'http://localhost:8080' },
     restoreMocks: true,
+    // Rendered pages run several mocked requests; with every file at once, 5 s is too tight.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

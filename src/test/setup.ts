@@ -1,6 +1,6 @@
 // Runs before every test file (vite.config.ts → test.setupFiles).
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 import { setUploadTransport } from '@/api/client'
 import { fetchTransport } from '@/api/upload-transport'
@@ -8,6 +8,10 @@ import { session } from '@/features/auth/session'
 import { cartStore } from '@/features/cart/cart-store'
 import { mockStore } from './msw/handlers'
 import { server } from './msw/server'
+
+// findBy*/waitFor give up after 1 s by default. The first render of an owner page (sign-in check,
+// lazy route, several queries) can take longer than that when every test file runs at once.
+configure({ asyncUtilTimeout: 4000 })
 
 // Any request without a handler fails the test, so tests never hit a real API by accident.
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ClipboardList, Search } from 'lucide-react'
 import { useId } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useLocation, useSearchParams } from 'react-router'
 import {
   Badge,
   Button,
@@ -34,6 +34,7 @@ import {
   type OrderStatus,
   type OwnerOrder,
 } from './orders-list'
+import type { OrderLinkState } from './OrderDetailPage'
 import { ownerOrdersQuery } from './owner-queries'
 
 /** `/owner/orders`: every order, newest pickups first, with filters kept in the URL. */
@@ -371,6 +372,8 @@ function OrderRow({
   today: string
   now: number
 }) {
+  // The detail's "All orders" link comes back to these filters.
+  const listSearch = useLocation().search.slice(1)
   const pickupDate = todayIn(zone, new Date(order.pickupAt))
   const deadline = pendingDeadline(order, now)
   return (
@@ -387,6 +390,7 @@ function OrderRow({
       <td className="px-4 py-3 align-top">
         <Link
           to={`/owner/orders/${order.id}`}
+          state={{ listSearch } satisfies OrderLinkState}
           className="font-mono font-medium text-text underline-offset-4 hover:underline"
         >
           {order.reference}
