@@ -607,20 +607,37 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       if (!isOwner(request)) return apiError(request, 401, 'authentication required')
       const params = new URL(request.url).searchParams
       const statuses = params.getAll('status')
-      const query = params.get('q')?.trim().toLowerCase()
+      const query = params.get('q')?.trim().toLowerCase() ?? ''
       // A pickup range: from inclusive, to exclusive, either end open (instants).
       const from = params.get('from')
       const to = params.get('to')
+      if (from && to && Date.parse(from) >= Date.parse(to)) {
+        return apiError(request, 400, 'from must be before to')
+      }
+      if (query.length > 100) {
+        return apiError(request, 400, 'search may be at most 100 characters')
+      }
+      // Like the server: pickupAt ascending unless asked otherwise.
+      const [field = 'pickupAt', dir = 'asc'] = (params.get('sort') ?? 'pickupAt,asc').split(',')
+      if (field !== 'pickupAt' && field !== 'createdAt') {
+        return apiError(request, 400, `No property '${field}' found for type 'Order'`)
+      }
+      const direction = dir === 'desc' ? -1 : 1
       const list = store.orders
         .filter((o) => statuses.length === 0 || statuses.includes(o.status))
-        .filter((o) => (!from || o.pickupAt >= from) && (!to || o.pickupAt < to))
+        .filter(
+          (o) =>
+            (!from || Date.parse(o.pickupAt) >= Date.parse(from)) &&
+            (!to || Date.parse(o.pickupAt) < Date.parse(to)),
+        )
         .filter(
           (o) =>
             !query ||
-            o.reference.toLowerCase().includes(query) ||
-            o.guestContact.name.toLowerCase().includes(query),
+            [o.reference, o.guestContact.name, o.guestContact.email, o.guestContact.phone].some(
+              (text) => text.toLowerCase().includes(query),
+            ),
         )
-        .toSorted((a, b) => a.pickupAt.localeCompare(b.pickupAt))
+        .toSorted((x, y) => x[field].localeCompare(y[field]) * direction)
         .map(ownerView)
       const page: Schema<'PageOrderResponse'> = springPage(list, params)
       return HttpResponse.json(page)

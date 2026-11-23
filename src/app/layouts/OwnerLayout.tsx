@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, ScrollRestoration, useLocation } from 'react-router'
 import { session } from '@/features/auth/session'
 import { meQuery } from '@/features/auth/use-session'
+import { pendingCountQuery } from '@/features/orders/owner-queries'
 import { dismissPasswordReminder, usePasswordReminder } from '@/features/profile/password-reminder'
 import { cn } from '@/lib/cn'
 import { ownerNav } from './owner-nav'
@@ -47,6 +48,7 @@ export function OwnerLayout() {
                 >
                   <Icon aria-hidden="true" className="size-4" />
                   {label}
+                  {path === 'orders' && <PendingBadge />}
                 </NavLink>
               </li>
             ))}
@@ -69,6 +71,19 @@ export function OwnerLayout() {
       </main>
       <ScrollRestoration />
     </div>
+  )
+}
+
+/** Orders waiting to be confirmed or rejected, next to "Orders" in the navigation. */
+function PendingBadge() {
+  const pending = useQuery(pendingCountQuery())
+  const count = pending.data ?? 0
+  if (count === 0) return null
+  return (
+    <span className="ml-auto rounded-full bg-warning px-2 py-0.5 text-xs font-semibold text-surface tabular-nums">
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">, {count} pending</span>
+    </span>
   )
 }
 

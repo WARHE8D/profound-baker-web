@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDown, ArrowUp, ArrowUpDown, Croissant, Plus, Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Croissant, Plus, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { apiUrl } from '@/api'
 import {
@@ -9,8 +8,10 @@ import {
   ButtonLink,
   EmptyState,
   ErrorState,
-  Input,
+  Pagination,
+  SearchInput,
   Select,
+  SortHeader,
   Spinner,
   useToast,
 } from '@/components'
@@ -87,7 +88,12 @@ export function ItemsPage() {
       </div>
 
       <search className="grid gap-3 sm:grid-cols-[1fr_12rem_10rem]">
-        <SearchBox value={params.search} onChange={(q) => update({ q })} />
+        <SearchInput
+          label="Search items"
+          placeholder="Search by name"
+          value={params.search}
+          onChange={(q) => update({ q })}
+        />
         <Select
           aria-label="Category"
           value={params.categoryId ?? ''}
@@ -147,6 +153,7 @@ export function ItemsPage() {
               page={page.number}
               totalPages={page.totalPages}
               total={page.totalElements}
+              noun={['item', 'items']}
               onPage={(n) => update({ page: n === 0 ? null : String(n + 1) }, { keepPage: true })}
             />
           </>
@@ -167,40 +174,6 @@ export function ItemsPage() {
   )
 }
 
-/** Search as you type, sent once typing pauses. */
-function SearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [text, setText] = useState(value)
-  const [synced, setSynced] = useState(value)
-  // The URL changed from outside (back button, "Clear filters"): show that.
-  if (value !== synced) {
-    setSynced(value)
-    setText(value)
-  }
-
-  useEffect(() => {
-    if (text.trim() === value) return
-    const timer = setTimeout(() => onChange(text.trim()), 300)
-    return () => clearTimeout(timer)
-  }, [text, value, onChange])
-
-  return (
-    <div className="relative">
-      <Search
-        aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
-      />
-      <Input
-        type="search"
-        aria-label="Search items"
-        placeholder="Search by name"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        className="pl-9"
-      />
-    </div>
-  )
-}
-
 type ItemsTableProps = {
   items: Item[]
   params: ItemListParams
@@ -210,7 +183,14 @@ type ItemsTableProps = {
 
 function ItemsTable({ items, params, onSort, busy }: ItemsTableProps) {
   const header = (field: SortField, label: string, className?: string) => (
-    <SortHeader field={field} label={label} params={params} onSort={onSort} className={className} />
+    <SortHeader
+      field={field}
+      label={label}
+      sort={params.sort}
+      direction={params.direction}
+      onSort={onSort}
+      className={className}
+    />
   )
 
   return (
@@ -255,42 +235,6 @@ const SORT_LABELS: Record<SortField, string> = {
 
 const sortLabel = (params: ItemListParams) =>
   `${SORT_LABELS[params.sort]}, ${params.direction === 'asc' ? 'ascending' : 'descending'}`
-
-function SortHeader({
-  field,
-  label,
-  params,
-  onSort,
-  className,
-}: {
-  field: SortField
-  label: string
-  params: ItemListParams
-  onSort: (field: SortField) => void
-  className?: string
-}) {
-  const active = params.sort === field
-  const Icon = !active ? ArrowUpDown : params.direction === 'asc' ? ArrowUp : ArrowDown
-  return (
-    <th
-      scope="col"
-      aria-sort={active ? (params.direction === 'asc' ? 'ascending' : 'descending') : undefined}
-      className={cn('px-4 py-2 font-semibold', className)}
-    >
-      <button
-        type="button"
-        onClick={() => onSort(field)}
-        className={cn(
-          'inline-flex items-center gap-1 rounded-control hover:text-text',
-          active && 'text-text',
-        )}
-      >
-        {label}
-        <Icon aria-hidden="true" className={cn('size-3.5', !active && 'opacity-40')} />
-      </button>
-    </th>
-  )
-}
 
 function ItemRow({ item }: { item: Item }) {
   const thumbnail = item.thumbnailUrls[0]
@@ -391,46 +335,5 @@ function AvailabilitySwitch({ item }: { item: Item }) {
         )}
       />
     </button>
-  )
-}
-
-function Pagination({
-  page,
-  totalPages,
-  total,
-  onPage,
-}: {
-  page: number
-  totalPages: number
-  total: number
-  onPage: (page: number) => void
-}) {
-  return (
-    <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-3 text-sm">
-      <p className="text-muted">{total === 1 ? '1 item' : `${total} items`}</p>
-      {totalPages > 1 && (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onPage(page - 1)}
-            disabled={page === 0}
-          >
-            Previous
-          </Button>
-          <span className="tabular-nums">
-            Page {page + 1} of {totalPages}
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onPage(page + 1)}
-            disabled={page + 1 >= totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      )}
-    </nav>
   )
 }
