@@ -85,25 +85,25 @@ Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets i
 
 ### Scripts
 
-| Command                           | What it does                                              |
-| --------------------------------- | --------------------------------------------------------- |
-| `npm run dev`                     | Start the dev server with hot reload on port 5173         |
-| `npm run dev:mock`                | Same, with the API mocked: no backend needed              |
-| `npm run build`                   | Type-check, then build for production into `dist/`        |
-| `npm run preview`                 | Serve the production build locally                        |
-| `npm run typecheck`               | Type-check only                                           |
-| `npm run lint`                    | Lint with oxlint; warnings fail                           |
-| `npm run format` / `format:check` | Format with Prettier / check formatting                   |
-| `npm test`                        | Run the tests once (Vitest + React Testing Library)       |
-| `npm run test:watch`              | Run the tests in watch mode                               |
-| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/`       |
-| `npm run e2e:backend`             | Start the backend for the end-to-end tests (Docker)       |
-| `npm run e2e`                     | Run the end-to-end tests (Playwright)                     |
-| `npm run e2e:production:up`       | Also start the production image behind the server's Caddy |
-| `npm run e2e:production`          | Run the end-to-end tests against that production stack    |
-| `npm run e2e:backend:down`        | Stop that backend and drop its data                       |
-| `npm run api:types`               | Refresh the API spec and types from a running backend     |
-| `npm run api:check`               | Check the API types match the committed spec              |
+| Command                           | What it does                                               |
+| --------------------------------- | ---------------------------------------------------------- |
+| `npm run dev`                     | Start the dev server with hot reload on port 5173          |
+| `npm run dev:mock`                | Same, with the API mocked: no backend needed               |
+| `npm run build`                   | Type-check, then build for production into `dist/`         |
+| `npm run preview`                 | Serve the production build locally                         |
+| `npm run typecheck`               | Type-check only                                            |
+| `npm run lint`                    | Lint with oxlint; warnings fail                            |
+| `npm run format` / `format:check` | Format with Prettier / check formatting                    |
+| `npm test`                        | Run the tests once (Vitest + React Testing Library)        |
+| `npm run test:watch`              | Run the tests in watch mode                                |
+| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/`        |
+| `npm run e2e:stack`               | Start the server's e2e stack (Docker), this build included |
+| `npm run e2e`                     | Run the end-to-end tests (Playwright) on `vite preview`    |
+| `npm run e2e:production`          | Run them against the production image on :8081             |
+| `npm run e2e:stack:logs`          | Show the stack's logs (add service names to narrow it)     |
+| `npm run e2e:stack:down`          | Stop the stack and drop its data                           |
+| `npm run api:types`               | Refresh the API spec and types from a running backend      |
+| `npm run api:check`               | Check the API types match the committed spec               |
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `format:check`, `lint`, `api:check`,
 `typecheck`, `test:coverage` and `build` on every push and pull request, and the end-to-end tests
@@ -176,25 +176,37 @@ real backend:
 - **Accessibility:** axe on every page at three widths and in both themes, and both flows with the
   keyboard alone (see [Accessibility](#accessibility)).
 
-The backend runs from [e2e/compose.yaml](e2e/compose.yaml): profound-baker-server built from a
-checkout of its repository, with Postgres in memory. Its Owner, time zone, CORS origin and relaxed
-rate limits are set there. Before the tests, `e2e/global-setup.ts` opens the bakery every day and
-adds a test category and item through the API, so a fresh database is enough. Each test places its
-own orders.
+The stack they run against lives in profound-baker-server, next to production's compose file and
+its secrets; this repository has no compose file of its own. It is production's
+`docker-compose.prod.yml` with `docker-compose.e2e.yml` on top, as its own project
+(`sugarcrumbs-e2e`): Postgres in memory, the API built from that checkout, and this checkout's
+image behind the production Caddyfile. The Owner, time zone, CORS origins and relaxed rate limits are
+in its `.env.e2e`. See the server's README, "End-to-end stack for the web app".
+[scripts/e2e-stack.mjs](scripts/e2e-stack.mjs) runs it.
+
+| URL                     | What                                                                      |
+| ----------------------- | ------------------------------------------------------------------------- |
+| <http://localhost:8080> | The API, for the SPA `npm run e2e` serves on `vite preview` (:4173)       |
+| <http://localhost:8081> | The site as deployed: this build and the API behind one Caddy, one origin |
 
 ```sh
-# Once: the server repository next to this one (or set SERVER_DIR to its path, relative to e2e/)
+# Once: the server repository next to this one, or its path in SERVER_DIR (environment or .env.local)
 git clone https://github.com/WARHE8D/profound-baker-server ../profound-baker-server
 
-npm run e2e:backend      # build and start it on :8080; waits until it is healthy
-npm run e2e              # builds the SPA with VITE_API_BASE_URL=http://localhost:8080, serves it on :4173
-npm run e2e:backend:down # stop it; the data goes with it
+npm run e2e:stack       # build the API and this image, start them; waits until healthy
+npm run e2e             # builds the SPA with VITE_API_BASE_URL=http://localhost:8080, serves it on :4173
+npm run e2e:production  # the same tests on :8081: the real routing, headers and CSP (what CI runs)
+npm run e2e:stack:down  # stop it; the data goes with it
 ```
 
-**Against the production image.** `npm run e2e:production:up` also builds this repository's image
-and runs it behind the server's own Caddyfile on <http://localhost:8081>, with one origin and the
-real routing, headers and CSP. `npm run e2e:production` runs the same tests there, which is what CI
-does. Every test fails if the page logs a Content Security Policy violation.
+Before the tests, `e2e/global-setup.ts` opens the bakery every day and adds a test category and item
+through the API, so an empty database is enough. Each test places its own orders. Every test fails
+if the page logs a Content Security Policy violation.
+
+**Production data.** If the server's `backups/` folder holds a dump, the stack starts from a copy
+of production instead of an empty bakery (CI never has one). The tests then run beside real orders
+and items, and their traces and screenshots in `test-results/` and `playwright-report/` can show
+real customers' names and contact details: keep them on your machine.
 
 Locally the tests use the installed Chrome; CI installs Playwright's Chromium. A failing test
 leaves a trace in `test-results/` (`npx playwright show-trace <file>`). In CI the backend's logs
@@ -489,7 +501,7 @@ of `main`. Or, on the server, pin the build you want with its commit SHA:
 `curl -sI https://<APP_DOMAIN>/orders/x` should answer `200` with a `Content-Security-Policy`
 header, and `curl -s https://<APP_DOMAIN>/api/public/bakery` should return the bakery's JSON.
 
-**Try it locally.** `npm run e2e:production:up` builds the image and runs it behind the server's
+**Try it locally.** `npm run e2e:stack` builds the image and runs it behind the server's
 Caddyfile on <http://localhost:8081> (see [End-to-end tests](#end-to-end-tests)).
 
 ## Related

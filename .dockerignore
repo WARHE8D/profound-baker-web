@@ -13,3 +13,6 @@ docs
 openapi
 *.local
 .env.mock
+scripts
+# CI checks the server out inside this workspace, for the e2e stack.
+profound-baker-server
