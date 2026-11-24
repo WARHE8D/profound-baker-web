@@ -500,6 +500,53 @@ describe('dashboard summary', () => {
   })
 })
 
+const production = (date?: string) =>
+  unwrap(api.GET('/api/dashboard/production', { params: { query: { date } } }))
+
+describe('production list', () => {
+  beforeEach(async () => {
+    seedDemo(mockStore)
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('sums a day’s confirmed and in-progress lines per item, by current name', async () => {
+    // A renamed item shows its new name; a deleted one keeps the name its order recorded.
+    const croissant = mockStore.findItem(ids.items.croissant)!
+    mockStore.saveItem({ ...croissant, name: 'All-butter croissant' })
+    const order = mockStore.findById(id('005'))!
+    mockStore.updateOrder(order, {
+      lines: [...order.lines, { ...order.lines[0]!, lineNo: 2, itemId: null, itemName: 'Stollen' }],
+    })
+
+    expect(await production()).toEqual({
+      date: '2026-11-20',
+      orderCount: 2,
+      items: [
+        {
+          itemId: ids.items.croissant,
+          itemName: 'All-butter croissant',
+          quantity: 4,
+          orderCount: 1,
+        },
+        { itemId: ids.items.baguette, itemName: 'Baguette', quantity: 1, orderCount: 1 },
+        {
+          itemId: ids.items.chocolateCake,
+          itemName: 'Chocolate fudge cake',
+          quantity: 1,
+          orderCount: 1,
+        },
+        { itemId: null, itemName: 'Stollen', quantity: 1, orderCount: 1 },
+      ],
+    })
+  })
+
+  test('leaves out pending, rejected and cancelled orders; refuses a malformed date', async () => {
+    expect(await production('2026-11-21')).toEqual({ date: '2026-11-21', orderCount: 0, items: [] })
+    expect(await failure(production('21/11/2026'))).toMatchObject({ status: 400 })
+  })
+})
+
 describe('owner order changes', () => {
   beforeEach(async () => {
     demoOrders(NOW).forEach((order) => mockStore.seed(order))

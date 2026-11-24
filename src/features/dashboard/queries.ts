@@ -20,3 +20,16 @@ export const dashboardSummaryQuery = (months = REVENUE_MONTHS) =>
       unwrap(api.GET('/api/dashboard/summary', { params: { query: { months } }, signal })),
     refetchInterval: 60_000,
   })
+
+export const productionKeys = {
+  day: (date: string) => ['owner', 'dashboard', 'production', date] as const,
+}
+
+/** What to make for one day's pickups (a "YYYY-MM-DD" in the bakery's time zone). */
+export const productionQuery = (date: string) =>
+  queryOptions({
+    queryKey: productionKeys.day(date),
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/dashboard/production', { params: { query: { date } }, signal })),
+    refetchInterval: 60_000,
+  })

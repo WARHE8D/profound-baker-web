@@ -1066,6 +1066,44 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       return HttpResponse.json(summary)
     }),
 
+    http.get(api('/api/dashboard/production'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const param = new URL(request.url).searchParams.get('date')
+      if (param !== null && (!ISO_DATE.test(param) || Number.isNaN(Date.parse(param)))) {
+        return apiError(request, 400, `invalid value for parameter 'date': ${param}`)
+      }
+      // A day in the bakery's time zone, today there if left out; like DashboardService.
+      const date = param ?? store.today()
+      const due = store.orders.filter(
+        (o) =>
+          (o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS') &&
+          todayIn(FIXTURE_TIME_ZONE, new Date(o.pickupAt)) === date,
+      )
+      // Summed per item; a deleted item's lines are told apart by the name they recorded.
+      const byItem = new Map<string, Schema<'ProductionItemResponse'>>()
+      for (const order of due) {
+        for (const line of order.lines) {
+          const key = line.itemId ?? `name:${line.itemName}`
+          const row = byItem.get(key)
+          byItem.set(key, {
+            itemId: line.itemId,
+            // Shown under the catalogue's current name.
+            itemName: (line.itemId && store.findItem(line.itemId)?.name) || line.itemName,
+            quantity: (row?.quantity ?? 0) + line.quantity,
+            orderCount: (row?.orderCount ?? 0) + 1,
+          })
+        }
+      }
+      const production: Schema<'ProductionListResponse'> = {
+        date,
+        orderCount: due.length,
+        items: [...byItem.values()].toSorted((a, b) =>
+          a.itemName.localeCompare(b.itemName, 'en', { sensitivity: 'base' }),
+        ),
+      }
+      return HttpResponse.json(production)
+    }),
+
     // ---- Uploaded images: a generated placeholder per item ----
     http.get(`${apiBaseUrl}/uploads/items/:file`, ({ params }) => {
       const upload = store.findUpload(String(params.file))

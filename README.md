@@ -320,6 +320,12 @@ still to collect, the pending count, and revenue by month, oldest first. Revenue
 are paid now, in the month they were paid, so a refund takes its payment back out. Each card opens the
 matching orders or invoices view; the page also lists today's pickups and refreshes every minute.
 
+The production list (`/owner/production?date=YYYY-MM-DD`, today when left out) shows
+`GET /api/dashboard/production`: units per item for one day's confirmed and in-progress pickups, under
+each item's current name (a deleted item keeps the name its orders recorded). Pending orders aren't
+counted, so the page says how many there are for that day. It prints as a sheet with a box per item to
+tick off.
+
 ### Errors
 
 Every error has the same JSON body:
