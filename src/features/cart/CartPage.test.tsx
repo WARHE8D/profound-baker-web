@@ -67,7 +67,7 @@ test('changing a quantity updates the line, subtotal and header', async () => {
 
   expect(within(line('Country sourdough')).getByText('CA$25.50')).toBeInTheDocument()
   expect(subtotal()).toHaveTextContent('CA$25.50')
-  expect(screen.getByRole('button', { name: 'Cart, 3 items' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Cart 3 items' })).toBeInTheDocument()
   expect(cartStore.getLines()[0]?.quantity).toBe(3)
 })
 
@@ -135,7 +135,7 @@ test('the header button opens the cart drawer, which links to the cart page', as
   cartStore.add(sourdough, 2)
   renderRoute('/')
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Cart, 2 items' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Cart 2 items' }))
 
   const drawer = await screen.findByRole('dialog', { name: 'Your cart' })
   expect(within(drawer).getByText('2 items')).toBeInTheDocument()
@@ -151,7 +151,7 @@ test('checkout from the drawer goes to the checkout page', async () => {
   cartStore.add(baguette, 1)
   const { router } = renderRoute('/')
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Cart, 1 item' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Cart 1 item' }))
   const drawer = await screen.findByRole('dialog', { name: 'Your cart' })
   await userEvent.click(await within(drawer).findByRole('link', { name: 'Checkout' }))
 

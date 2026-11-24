@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { isApiError } from '@/api'
-import { Button, Field, Input, Spinner } from '@/components'
+import { Button, Field, Input, RouteFocus, Spinner } from '@/components'
 import { useNow } from '@/lib/use-now'
 import { safeNext } from './redirect'
 import { session, type SessionEnd } from './session'
@@ -31,7 +31,12 @@ export function LoginPage() {
   if (state.status === 'signedIn') return <Navigate to={next} replace />
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 px-4 py-10">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="flex min-h-dvh flex-col items-center justify-center gap-6 px-4 py-10 outline-none"
+    >
+      <RouteFocus />
       <Link to="/" className="font-display text-3xl font-semibold text-primary">
         SugarCrumbs
       </Link>
@@ -50,7 +55,7 @@ export function LoginPage() {
       >
         ← Back to the shop
       </Link>
-    </div>
+    </main>
   )
 }
 

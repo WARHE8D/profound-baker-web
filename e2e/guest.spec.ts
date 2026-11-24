@@ -22,7 +22,7 @@ test('a guest orders from the menu, follows the magic link and cancels', async (
   await page.getByRole('button', { name: 'Increase quantity' }).click()
   await page.getByRole('button', { name: 'Add to cart' }).click()
   await expect(page.getByText(`Added 2 × ${SEED.item} to your cart`)).toBeVisible()
-  await page.getByRole('button', { name: 'Cart, 2 items' }).click()
+  await page.getByRole('button', { name: 'Cart 2 items' }).click()
   const drawer = page.getByRole('dialog', { name: 'Your cart' })
   await drawer.getByRole('link', { name: 'Checkout' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Checkout' })).toBeVisible()
@@ -36,9 +36,10 @@ test('a guest orders from the menu, follows the magic link and cancels', async (
   if (!(await day.isVisible())) await page.getByRole('button', { name: 'Next month' }).click()
   await day.click()
   const slots = page.getByRole('group', { name: `Pickup times on ${dayLabel(bakeryDate(3))}` })
-  // The radios are drawn as their labels; pick the first time, as a guest would.
-  await slots.locator('label').first().click()
-  await expect(slots.getByRole('radio').first()).toBeChecked()
+  // The radios are drawn as their labels: click the first time with places left, as a guest would.
+  const slot = slots.getByRole('radio', { disabled: false }).first()
+  await page.locator(`label[for="${await slot.getAttribute('id')}"]`).click()
+  await expect(slot).toBeChecked()
 
   // Checkout.
   await page.getByRole('textbox', { name: /^Name/ }).fill('Ada Lovelace')
@@ -48,7 +49,7 @@ test('a guest orders from the menu, follows the magic link and cancels', async (
 
   await expect(page.getByRole('heading', { name: 'Thank you, your order is placed' })).toBeVisible()
   const reference = await page.locator('strong', { hasText: /^SC-/ }).innerText()
-  await expect(page.getByRole('button', { name: 'Cart, 0 items' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cart 0 items' })).toBeVisible()
 
   // The magic link: the only way back to the order.
   const link = await page.getByRole('link', { name: /\/orders\// }).getAttribute('href')

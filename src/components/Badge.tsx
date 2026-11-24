@@ -3,10 +3,10 @@ import { cn } from '@/lib/cn'
 
 const tones = {
   neutral: 'bg-surface-muted text-muted',
-  primary: 'bg-primary/15 text-primary',
-  success: 'bg-success/15 text-success',
-  warning: 'bg-warning/15 text-warning',
-  danger: 'bg-danger/15 text-danger',
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/10 text-success',
+  warning: 'bg-warning/10 text-warning',
+  danger: 'bg-danger/10 text-danger',
 } as const
 
 export type BadgeTone = keyof typeof tones

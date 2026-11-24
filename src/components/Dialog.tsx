@@ -15,7 +15,8 @@ type DialogProps = {
 
 /**
  * Modal dialog on the native <dialog> element: the browser traps focus, closes on Esc and returns
- * focus to the element that opened it.
+ * focus to the element that opened it. A dialog rendered only while open (`{open && <Dialog …>}`)
+ * is removed rather than closed, so it returns focus itself.
  */
 export function Dialog({
   open,
@@ -27,15 +28,28 @@ export function Dialog({
   children,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const opener = useRef<Element | null>(null)
   const titleId = useId()
   const descriptionId = useId()
 
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      opener.current = document.activeElement
+      dialog.showModal()
+    }
     if (!open && dialog.open) dialog.close()
   }, [open])
+
+  // Removed while open: back to the opener, if it is still there (else RouteFocus takes over).
+  useEffect(() => {
+    const dialog = ref.current
+    return () => {
+      const back = opener.current
+      if (dialog?.open && back instanceof HTMLElement && back.isConnected) back.focus()
+    }
+  }, [])
 
   return (
     // The backdrop click below is a mouse shortcut; Esc (onCancel) is its keyboard equivalent.

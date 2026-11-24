@@ -67,3 +67,23 @@ test('a click on the backdrop closes it, a click inside does not', async () => {
   await userEvent.click(screen.getByRole('dialog'))
   expect(onClose).toHaveBeenCalledTimes(1)
 })
+
+function OnlyWhileOpen() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Mark paid…</Button>
+      {open && <Dialog open onClose={() => setOpen(false)} title="Record payment" />}
+    </>
+  )
+}
+
+test('rendered only while open, it still gives focus back to the button that opened it', async () => {
+  render(<OnlyWhileOpen />)
+  const opener = screen.getByRole('button', { name: 'Mark paid…' })
+  await userEvent.click(opener)
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(opener).toHaveFocus()
+})

@@ -106,7 +106,7 @@ test('adds the chosen quantity to the cart and updates the header', async () => 
   expect(cartStore.getLines()).toEqual([
     expect.objectContaining({ itemId: ids.items.sourdough, quantity: 3, price: 8.5 }),
   ])
-  expect(screen.getByRole('button', { name: 'Cart, 3 items' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Cart 3 items' })).toBeInTheDocument()
   expect(screen.getByText('3 already in your cart.')).toBeInTheDocument()
   // Ready for the next add.
   expect(screen.getByRole('spinbutton', { name: 'Quantity' })).toHaveValue(1)

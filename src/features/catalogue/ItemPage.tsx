@@ -27,6 +27,7 @@ export function ItemPage() {
   } else if (item.isError) {
     content = (
       <ErrorState
+        level={1}
         error={item.error}
         title="We couldn't load this item"
         onRetry={() => void item.refetch()}
@@ -163,6 +164,7 @@ function AddToCart({ item }: { item: Schema<'PublicItemResponse'> }) {
 function ItemNotFound() {
   return (
     <EmptyState
+      level={1}
       icon="🧁"
       title="We couldn't find that item"
       description="It may have sold out for the season or been taken off the menu."

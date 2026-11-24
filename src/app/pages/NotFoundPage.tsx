@@ -9,6 +9,7 @@ export function NotFoundPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">
       <EmptyState
+        level={1}
         icon="🧁"
         title="We couldn't find that page"
         description="The link may be old, or the page may have moved."

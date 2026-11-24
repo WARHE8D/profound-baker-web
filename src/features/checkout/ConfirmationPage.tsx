@@ -29,6 +29,7 @@ export function ConfirmationPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16">
         <EmptyState
+          level={1}
           icon="🧁"
           title="Nothing to show here"
           description="This page only appears right after you place an order."
