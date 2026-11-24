@@ -224,9 +224,17 @@ function TodaysPickups({ today, zone, now }: { today: string; zone: string; now:
       aria-labelledby="pickups-heading"
       className="flex flex-col gap-3 rounded-card border border-border bg-surface p-5"
     >
-      <h2 id="pickups-heading" className="text-lg font-semibold">
-        Today’s pickups
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="pickups-heading" className="text-lg font-semibold">
+          Today’s pickups
+        </h2>
+        <Link
+          to="/owner/production"
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          What to make
+        </Link>
+      </div>
       {orders.isError ? (
         <p className="text-sm text-danger">We couldn't load today's orders.</p>
       ) : !orders.data ? (

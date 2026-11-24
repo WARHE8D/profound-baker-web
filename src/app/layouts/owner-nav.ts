@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  ChefHat,
   ClipboardList,
   Croissant,
   LayoutDashboard,
@@ -21,6 +22,7 @@ export type OwnerNavItem = {
 export const ownerNav: OwnerNavItem[] = [
   { path: '', label: 'Dashboard', icon: LayoutDashboard, sprint: 7 },
   { path: 'orders', label: 'Orders', icon: ClipboardList, sprint: 6 },
+  { path: 'production', label: 'Production', icon: ChefHat, sprint: 7 },
   { path: 'items', label: 'Items', icon: Croissant, sprint: 5 },
   { path: 'categories', label: 'Categories', icon: Tags, sprint: 5 },
   { path: 'availability', label: 'Availability', icon: CalendarClock, sprint: 5 },

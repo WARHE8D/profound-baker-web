@@ -27,6 +27,9 @@ const ownerPages: Record<string, RouteObject['lazy']> = {
   }),
   orders: async () => ({ Component: (await import('@/features/orders/OrdersPage')).OrdersPage }),
   items: async () => ({ Component: (await import('@/features/items/ItemsPage')).ItemsPage }),
+  production: async () => ({
+    Component: (await import('@/features/dashboard/ProductionPage')).ProductionPage,
+  }),
   invoices: async () => ({
     Component: (await import('@/features/invoices/InvoicesPage')).InvoicesPage,
   }),
