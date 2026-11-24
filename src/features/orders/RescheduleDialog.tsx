@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { isApiError } from '@/api'
-import { Button, Dialog, useToast } from '@/components'
+import { ActionError, Button, Dialog, useToast } from '@/components'
 import { SlotPicker, type PickupSelection } from '@/features/checkout/SlotPicker'
 import { formatLocal } from '@/lib/time'
-import { ActionError } from './ActionError'
 import { OrderChangedError, orderChangedToast, useOrderAction } from './order-actions'
 import type { OwnerOrder } from './orders-list'
 

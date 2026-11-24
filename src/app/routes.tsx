@@ -24,6 +24,9 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 const ownerPages: Record<string, RouteObject['lazy']> = {
   orders: async () => ({ Component: (await import('@/features/orders/OrdersPage')).OrdersPage }),
   items: async () => ({ Component: (await import('@/features/items/ItemsPage')).ItemsPage }),
+  invoices: async () => ({
+    Component: (await import('@/features/invoices/InvoicesPage')).InvoicesPage,
+  }),
   categories: async () => ({
     Component: (await import('@/features/categories/CategoriesPage')).CategoriesPage,
   }),
@@ -117,8 +120,12 @@ export const routes: RouteObject[] = [
               Component: (await import('@/features/orders/OrderDetailPage')).OrderDetailPage,
             }),
           },
-          // S7.1 builds the invoice view; orders already link to their invoice.
-          { path: 'invoices/:invoiceId', element: <ComingSoonPage title="Invoice" sprint={7} /> },
+          {
+            path: 'invoices/:invoiceId',
+            lazy: async () => ({
+              Component: (await import('@/features/invoices/InvoicePage')).InvoicePage,
+            }),
+          },
           ...ownerNav.map(({ path, label, sprint }): RouteObject => {
             const built = ownerPages[path]
             if (built) return { path, lazy: built }

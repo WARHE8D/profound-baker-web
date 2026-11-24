@@ -102,3 +102,27 @@
     @apply outline-2 outline-offset-2 outline-ring;
   }
 }
+
+/*
+ * Printing (the invoice): always the light palette on white, whatever the screen's theme, and
+ * no page chrome. Elements opt out with Tailwind's print:hidden.
+ */
+@media print {
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-muted: #f6ede3;
+    --border: #d9c6b3;
+    --text: #1a110b;
+    --text-muted: #5a4638;
+    --primary: #9a4a12;
+    --success: #2f7a3e;
+    --warning: #9a5a00;
+    --danger: #b42318;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

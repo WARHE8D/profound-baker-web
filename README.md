@@ -297,6 +297,21 @@ what the Owner saw, so the page checks the order is unchanged before sending the
 ([src/features/orders/order-actions.ts](src/features/orders/order-actions.ts)). The API keeps no
 status history, so the progress shown is derived from the current status and timestamps.
 
+### Invoices
+
+`/owner/invoices` lists invoices newest first, filtered by status, issue date and a search on the
+invoice number or order reference (at most 50 characters), all kept in the URL. An invoice is
+`PENDING` (unpaid) until the Owner records a payment (`PAID`: cash, or a bank transfer with its
+reference, at a time that isn't in the future), which can later be `REFUNDED`. A discount can be set
+only while unpaid, from 0 (none) to the subtotal, in cents. Cancelling a confirmed order voids its
+unpaid invoice (`VOID`). Invoices have no `updatedAt`, so after a 400 or 409 the page reloads the
+invoice and compares its status, discount and payment to tell whether someone else changed it.
+
+`/owner/invoices/:id` is also the printable invoice: Print leaves out the navigation and the Owner's
+buttons, and prints in the light palette whatever the screen's theme (`@media print` in
+[src/index.css](src/index.css)). `npm run dev:mock` seeds paid, discounted and refunded invoices
+([src/mocks/demo-orders.ts](src/mocks/demo-orders.ts)).
+
 ### Errors
 
 Every error has the same JSON body:

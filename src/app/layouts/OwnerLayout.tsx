@@ -18,7 +18,7 @@ export function OwnerLayout() {
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
       <SkipLink />
-      <aside className="border-b border-border bg-surface md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:flex-col md:border-r md:border-b-0">
+      <aside className="border-b border-border bg-surface md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:flex-col md:border-r md:border-b-0 print:hidden">
         <div className="flex h-14 items-center justify-between px-4 md:h-16 md:px-5">
           <Link to="/owner" className="font-display text-xl font-semibold text-primary">
             SugarCrumbs
@@ -64,7 +64,7 @@ export function OwnerLayout() {
       </aside>
 
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 outline-none">
-        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 print:max-w-none print:p-0">
           <PasswordReminder />
           <Outlet />
         </div>
@@ -139,7 +139,7 @@ function PasswordReminder() {
   return (
     <section
       aria-label="Password reminder"
-      className="mb-6 flex items-start gap-3 rounded-card border border-warning/50 bg-warning/10 p-4 text-sm"
+      className="mb-6 flex items-start gap-3 rounded-card border border-warning/50 bg-warning/10 p-4 text-sm print:hidden"
     >
       <KeyRound aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-warning" />
       <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

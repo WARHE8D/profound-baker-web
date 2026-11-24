@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { isApiError } from '@/api'
 import {
+  ActionError,
   Badge,
   Button,
   ButtonLink,
@@ -15,10 +16,10 @@ import {
   useToast,
 } from '@/components'
 import { bakeryQuery } from '@/features/checkout/queries'
+import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES } from '@/features/invoices/invoices-list'
 import { formatMoney } from '@/lib/money'
 import { formatLocal } from '@/lib/time'
 import { useNow } from '@/lib/use-now'
-import { ActionError } from './ActionError'
 import { LinesEditor } from './LinesEditor'
 import { OrderChangedError, orderChangedToast, useOrderAction } from './order-actions'
 import {
@@ -459,14 +460,6 @@ function GuestContact({ contact }: { contact: OwnerOrder['guestContact'] }) {
   )
 }
 
-const INVOICE_TONES = {
-  PENDING: 'warning',
-  PAID: 'success',
-  REFUNDED: 'neutral',
-  VOID: 'neutral',
-} as const
-const INVOICE_LABELS = { PENDING: 'Unpaid', PAID: 'Paid', REFUNDED: 'Refunded', VOID: 'Void' }
-
 /** The invoice confirming issued; before that, when it will be. */
 function InvoiceSummary({ order }: { order: OwnerOrder }) {
   const possible = mayHaveInvoice(order.status)
@@ -510,7 +503,7 @@ function InvoiceSummary({ order }: { order: OwnerOrder }) {
         >
           {number}
         </Link>
-        <Badge tone={INVOICE_TONES[status]}>{INVOICE_LABELS[status]}</Badge>
+        <Badge tone={INVOICE_STATUS_TONES[status]}>{INVOICE_STATUS_LABELS[status]}</Badge>
       </div>
       <span className="tabular-nums">{formatMoney(total)}</span>
     </div>

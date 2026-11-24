@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* Always rendered: a live region must exist before messages are added to it. */}
       <section
         aria-label="Notifications"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex flex-col items-center gap-2 p-4 sm:items-end print:hidden"
       >
         <ol aria-live="polite" className="flex w-full max-w-sm flex-col gap-2">
           {toasts.map((t) => (

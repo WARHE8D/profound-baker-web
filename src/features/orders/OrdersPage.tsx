@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { ClipboardList, Search } from 'lucide-react'
-import { useId } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import {
   Badge,
   Button,
+  DateRangeFilter,
   EmptyState,
   ErrorState,
-  Input,
+  FilterChips,
   Pagination,
+  QuickViews,
   SearchInput,
   SortHeader,
   Spinner,
@@ -19,6 +20,7 @@ import { addDays, formatPlainDate } from '@/lib/date'
 import { formatMoney } from '@/lib/money'
 import { formatLocal, todayIn } from '@/lib/time'
 import { useNow } from '@/lib/use-now'
+import { useSearchUpdate } from '@/lib/use-search-update'
 import {
   formatRemaining,
   isFiltered,
@@ -83,37 +85,12 @@ function quickViews(today: string) {
   ]
 }
 
-const entries = (search: URLSearchParams) =>
-  [...search.entries()].map(([k, v]) => `${k}=${v}`).toSorted()
-/** Whether two URL searches hold the same params, in any order. */
-const sameSearch = (a: URLSearchParams, b: string) =>
-  JSON.stringify(entries(a)) === JSON.stringify(entries(new URLSearchParams(b)))
-
 function OrdersList({ zone }: { zone: string }) {
-  const id = useId()
-  const [search, setSearch] = useSearchParams()
+  const [search, update] = useSearchUpdate()
   const params = readOrderParams(search)
   const orders = useQuery(ownerOrdersQuery(params, zone))
   const now = useNow(30_000)
   const today = todayIn(zone, new Date(now))
-
-  /** Updates some URL params; any filter or sort change goes back to page 1. */
-  function update(changes: Record<string, string | string[] | null>, { keepPage = false } = {}) {
-    setSearch(
-      (current) => {
-        const next = new URLSearchParams(current)
-        for (const [key, value] of Object.entries(changes)) {
-          next.delete(key)
-          for (const v of Array.isArray(value) ? value : [value]) {
-            if (v !== null && v !== '') next.append(key, v)
-          }
-        }
-        if (!keepPage) next.delete('page')
-        return next
-      },
-      { replace: true },
-    )
-  }
 
   function sortBy(field: OrderSortField) {
     const direction = params.sort === field && params.direction === 'desc' ? 'asc' : 'desc'
@@ -135,27 +112,7 @@ function OrdersList({ zone }: { zone: string }) {
 
   return (
     <>
-      <nav aria-label="Quick views" className="flex flex-wrap gap-2">
-        {quickViews(today).map((view) => {
-          const current = sameSearch(search, view.search)
-          return (
-            <Link
-              key={view.label}
-              to={{ search: view.search }}
-              replace
-              aria-current={current ? 'page' : undefined}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                current
-                  ? 'border-primary bg-primary text-primary-fg'
-                  : 'border-border bg-surface hover:bg-surface-muted',
-              )}
-            >
-              {view.label}
-            </Link>
-          )
-        })}
-      </nav>
+      <QuickViews views={quickViews(today)} />
 
       <search className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
@@ -166,63 +123,26 @@ function OrdersList({ zone }: { zone: string }) {
             value={params.search}
             onChange={(q) => update({ q })}
           />
-          <fieldset className="flex flex-wrap items-center gap-2">
-            <legend className="sr-only">Pickup dates</legend>
-            <label htmlFor={`${id}-from`} className="text-sm text-muted">
-              Pickup from
-            </label>
-            <Input
-              id={`${id}-from`}
-              type="date"
-              className="w-auto"
-              value={params.from ?? ''}
-              max={params.to ?? undefined}
-              onChange={(event) => update({ from: event.target.value })}
-            />
-            <label htmlFor={`${id}-to`} className="text-sm text-muted">
-              to
-            </label>
-            <Input
-              id={`${id}-to`}
-              aria-label="Pickup to"
-              type="date"
-              className="w-auto"
-              value={params.to ?? ''}
-              min={params.from ?? undefined}
-              onChange={(event) => update({ to: event.target.value })}
-            />
-          </fieldset>
+          <DateRangeFilter
+            label="Pickup"
+            from={params.from}
+            to={params.to}
+            onChange={(change) => update(change)}
+          />
         </div>
-        <fieldset className="flex flex-wrap items-center gap-2">
-          <legend className="sr-only">Status</legend>
-          <span aria-hidden="true" className="text-sm text-muted">
-            Status:
-          </span>
-          {STATUSES.map((status) => (
-            <label
-              key={status}
-              className={cn(
-                'cursor-pointer rounded-full border px-3 py-1 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
-                params.statuses.includes(status)
-                  ? 'border-primary bg-primary/10 font-medium text-primary'
-                  : 'border-border hover:bg-surface-muted',
-              )}
-            >
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={params.statuses.includes(status)}
-                onChange={() => toggleStatus(status)}
-              />
-              {STATUS_LABELS[status]}
-            </label>
-          ))}
+        <FilterChips
+          legend="Status"
+          options={STATUSES}
+          labels={STATUS_LABELS}
+          selected={params.statuses}
+          onToggle={toggleStatus}
+        >
           {isFiltered(params) && (
             <Button variant="ghost" size="sm" onClick={clear} className="ml-auto">
               Clear filters
             </Button>
           )}
-        </fieldset>
+        </FilterChips>
       </search>
 
       {page ? (

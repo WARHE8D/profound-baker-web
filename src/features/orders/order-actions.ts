@@ -102,6 +102,8 @@ export function useOrderAction() {
       queryClient.invalidateQueries({ queryKey: [...ownerOrderKeys.all, 'list'] }),
       queryClient.invalidateQueries({ queryKey: ownerOrderKeys.pendingCount }),
       queryClient.invalidateQueries({ queryKey: ownerOrderKeys.invoice(order.id) }),
+      // Confirming issues an invoice; cancelling voids it.
+      queryClient.invalidateQueries({ queryKey: ['owner', 'invoices'] }),
       // Rejecting, cancelling and moving an order frees its place in a pickup slot.
       queryClient.invalidateQueries({ queryKey: checkoutKeys.availabilityAll }),
     ])
