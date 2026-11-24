@@ -312,6 +312,14 @@ buttons, and prints in the light palette whatever the screen's theme (`@media pr
 [src/index.css](src/index.css)). `npm run dev:mock` seeds paid, discounted and refunded invoices
 ([src/mocks/demo-orders.ts](src/mocks/demo-orders.ts)).
 
+### Dashboard
+
+The Owner lands on `/owner` after signing in. `GET /api/dashboard/summary?months=12` (1 to 24) gives,
+in the bakery's time zone: today's pickups (confirmed, in progress or collected) and how many are
+still to collect, the pending count, and revenue by month, oldest first. Revenue counts invoices that
+are paid now, in the month they were paid, so a refund takes its payment back out. Each card opens the
+matching orders or invoices view; the page also lists today's pickups and refreshes every minute.
+
 ### Errors
 
 Every error has the same JSON body:

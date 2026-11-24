@@ -465,6 +465,41 @@ describe('invoices', () => {
   })
 })
 
+describe('dashboard summary', () => {
+  beforeEach(async () => {
+    seedDemo(mockStore)
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('today’s pickups, the pending count and revenue by month, oldest first', async () => {
+    const summary = await unwrap(
+      api.GET('/api/dashboard/summary', { params: { query: { months: 3 } } }),
+    )
+    expect(summary).toMatchObject({
+      today: '2026-11-20',
+      todaysPickups: { total: 2, toCollect: 2 },
+      pendingOrders: 3,
+    })
+    expect(summary.revenueByMonth.map((m) => m.month)).toEqual(['2026-09', '2026-10', '2026-11'])
+    // A refund takes its payment back out: SC-D013's invoice isn't counted.
+    const refunded = invoiceOf('013')
+    const november = summary.revenueByMonth[2]!
+    expect(november.paidInvoices).toBe(
+      mockStore.invoices.filter((i) => i.status === 'PAID' && i.paidAt! >= '2026-11-01T05').length,
+    )
+    expect(refunded.status).toBe('REFUNDED')
+  })
+
+  test('refuses more than 24 months, or none', async () => {
+    for (const months of [0, 25]) {
+      expect(
+        await failure(unwrap(api.GET('/api/dashboard/summary', { params: { query: { months } } }))),
+      ).toMatchObject({ status: 400, message: 'months must be between 1 and 24' })
+    }
+  })
+})
+
 describe('owner order changes', () => {
   beforeEach(async () => {
     demoOrders(NOW).forEach((order) => mockStore.seed(order))

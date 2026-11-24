@@ -132,7 +132,11 @@ export function useInvoiceAction() {
   function refresh(invoice: Invoice) {
     queryClient.setQueryData(invoiceKeys.detail(invoice.id), invoice)
     queryClient.setQueryData(ownerOrderKeys.invoice(invoice.orderId), invoice)
-    return queryClient.invalidateQueries({ queryKey: [...invoiceKeys.all, 'list'] })
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: [...invoiceKeys.all, 'list'] }),
+      // Revenue by month counts paid invoices.
+      queryClient.invalidateQueries({ queryKey: ['owner', 'dashboard'] }),
+    ])
   }
 
   return useMutation({

@@ -3,7 +3,7 @@
 import { delay, http, HttpResponse, type HttpHandler } from 'msw'
 import type { FieldError, Schema } from '@/api'
 import { apiBaseUrl } from '@/api/config'
-import { addDays } from '@/lib/date'
+import { addDays, addMonths } from '@/lib/date'
 import { readImageHeader } from '@/lib/image-header'
 import { todayIn } from '@/lib/time'
 import { FIXTURE_TIME_ZONE, toPublicItem } from './fixtures'
@@ -26,6 +26,10 @@ const isOwner = (request: Request) =>
 /** OrderProperties' defaults: distinct items per order, and units of one item. */
 const MAX_ORDER_LINES = 20
 const MAX_LINE_QUANTITY = 100
+/** The bakery's "YYYY-MM" for an instant. */
+const monthIn = (instant: string) => todayIn(FIXTURE_TIME_ZONE, new Date(instant)).slice(0, 7)
+/** DashboardService.MAX_REVENUE_MONTHS: how far back the revenue chart may reach. */
+const MAX_REVENUE_MONTHS = 24
 /** InvoiceService.MAX_SEARCH_LENGTH. */
 const INVOICE_SEARCH_MAX = 50
 /** Statuses an order can still be rescheduled in. */
@@ -1021,6 +1025,46 @@ export function createHandlers(store: MockStore): HttpHandler[] {
         return HttpResponse.json(refunded)
       }),
     ),
+
+    // ---- Dashboard ----
+    http.get(api('/api/dashboard/summary'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const months = Number(new URL(request.url).searchParams.get('months') ?? 12)
+      if (!Number.isInteger(months) || months < 1 || months > MAX_REVENUE_MONTHS) {
+        return apiError(request, 400, `months must be between 1 and ${MAX_REVENUE_MONTHS}`)
+      }
+      // Everything in the bakery's time zone, like DashboardService.
+      const today = store.today()
+      const isToday = (instant: string) => todayIn(FIXTURE_TIME_ZONE, new Date(instant)) === today
+      const pickups = store.orders.filter((o) => isToday(o.pickupAt))
+      const count = (statuses: StoredOrder['status'][]) =>
+        pickups.filter((o) => statuses.includes(o.status)).length
+
+      // Revenue: invoices paid now, in the month they were paid; a refund takes it back out.
+      const revenueByMonth: Schema<'MonthlyRevenue'>[] = []
+      for (let back = months - 1; back >= 0; back -= 1) {
+        const month = addMonths(today.slice(0, 7), -back)
+        const paid = store.invoices.filter(
+          (i) => i.status === 'PAID' && i.paidAt && monthIn(i.paidAt) === month,
+        )
+        revenueByMonth.push({
+          month,
+          revenue: Math.round(paid.reduce((sum, i) => sum + i.total * 100, 0)) / 100,
+          paidInvoices: paid.length,
+        })
+      }
+
+      const summary: Schema<'DashboardSummaryResponse'> = {
+        today,
+        todaysPickups: {
+          total: count(['CONFIRMED', 'IN_PROGRESS', 'FULFILLED']),
+          toCollect: count(['CONFIRMED', 'IN_PROGRESS']),
+        },
+        pendingOrders: store.orders.filter((o) => o.status === 'PENDING').length,
+        revenueByMonth,
+      }
+      return HttpResponse.json(summary)
+    }),
 
     // ---- Uploaded images: a generated placeholder per item ----
     http.get(`${apiBaseUrl}/uploads/items/:file`, ({ params }) => {

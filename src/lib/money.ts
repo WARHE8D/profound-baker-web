@@ -70,3 +70,24 @@ export function parseMoney(text: string): number | null {
   if (!AMOUNT_PATTERN.test(cleaned)) return null
   return Number(cleaned)
 }
+
+const wholeFormatters = new Map<string, Intl.NumberFormat>()
+
+/** "CA$1,235": rounded to whole units, for chart axes where cents are noise. */
+export function formatMoneyWhole(
+  amount: number,
+  { currency = defaultCurrency, locale = defaultLocale }: MoneyOptions = {},
+): string {
+  const key = `${locale}|${currency}`
+  let formatter = wholeFormatters.get(key)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+    wholeFormatters.set(key, formatter)
+  }
+  return formatter.format(amount)
+}
