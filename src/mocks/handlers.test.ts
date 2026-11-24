@@ -8,9 +8,11 @@ import {
   readPage,
   setAccessTokenProvider,
   unwrap,
+  type operations,
   type Schema,
 } from '@/api'
 import { slotToUtc } from '@/lib/time'
+import { demoOrders } from './demo-orders'
 import { imageFile, pngBytes } from '@/test/images'
 import { mockStore } from '@/test/msw/handlers'
 import { FIXTURE_OWNER_CREDENTIALS, FIXTURE_TIME_ZONE, ids } from './fixtures'
@@ -337,6 +339,45 @@ test('uploaded image URLs return a placeholder image', async () => {
   )
   expect(response.headers.get('Content-Type')).toBe('image/svg+xml')
   expect(await response.text()).toContain('>B</text>')
+})
+
+type OrdersQuery = operations['calendar']['parameters']['query']
+
+/** One page of the Owner's orders, as the API returns it. */
+const listOrders = (query: NonNullable<OrdersQuery>) =>
+  unwrap(api.GET('/api/orders', { params: { query } })).then(readPage)
+
+/** The references of the orders a search finds. */
+const searchRefs = async (q: string) => (await listOrders({ q })).items.map((o) => o.reference)
+
+describe('owner orders list', () => {
+  beforeEach(async () => {
+    demoOrders(NOW).forEach((order) => mockStore.seed(order))
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('sorts by pickup or placed time, either way', async () => {
+    const byPickup = await listOrders({ sort: ['pickupAt,desc'], size: 3 })
+    expect(byPickup.items.map((o) => o.reference)).toEqual(['SC-D003', 'SC-D006', 'SC-D008'])
+    expect(byPickup.totalElements).toBe(26)
+    const byPlaced = await listOrders({ sort: ['createdAt,asc'], status: ['PENDING'] })
+    expect(byPlaced.items.map((o) => o.reference)).toEqual(['SC-D001', 'SC-D002', 'SC-D003'])
+  })
+
+  test('searches the reference and the guest’s name, email and phone, in any case', async () => {
+    expect(await searchRefs('sc-d004')).toEqual(['SC-D004'])
+    expect(await searchRefs('MEI.CHEN@')).toHaveLength(4)
+    expect(await searchRefs('555 0123')).toHaveLength(4)
+  })
+
+  test('refuses what the server refuses', async () => {
+    expect(
+      await failure(listOrders({ from: '2026-11-21T00:00:00Z', to: '2026-11-20T00:00:00Z' })),
+    ).toMatchObject({ status: 400, message: 'from must be before to' })
+    expect(await failure(listOrders({ q: 'x'.repeat(101) }))).toMatchObject({ status: 400 })
+    expect(await failure(listOrders({ sort: ['total,asc'] }))).toMatchObject({ status: 400 })
+  })
 })
 
 /** How many orders are due for pickup from `from` (included) to `to` (excluded). */

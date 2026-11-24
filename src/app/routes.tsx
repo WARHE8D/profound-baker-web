@@ -22,6 +22,7 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
 
 /** Owner pages that exist, by their path under /owner; the rest of the nav shows "coming soon". */
 const ownerPages: Record<string, RouteObject['lazy']> = {
+  orders: async () => ({ Component: (await import('@/features/orders/OrdersPage')).OrdersPage }),
   items: async () => ({ Component: (await import('@/features/items/ItemsPage')).ItemsPage }),
   categories: async () => ({
     Component: (await import('@/features/categories/CategoriesPage')).CategoriesPage,
@@ -110,6 +111,8 @@ export const routes: RouteObject[] = [
               Component: (await import('@/features/items/ItemEditorPage')).ItemEditorPage,
             }),
           },
+          // S6.2 builds the order detail; the orders list already links to it.
+          { path: 'orders/:orderId', element: <ComingSoonPage title="Order details" sprint={6} /> },
           ...ownerNav.map(({ path, label, sprint }): RouteObject => {
             const built = ownerPages[path]
             if (built) return { path, lazy: built }

@@ -282,6 +282,11 @@ days doesn't cancel orders already due then; the form says how many there are.
 `CANCELLED` means the customer or the system cancelled the order. The system cancels pending orders the
 Owner hasn't answered within 24 hours. Confirming an order creates its invoice (`INV-YYYY-NNNN`).
 
+The orders list at `/owner/orders` flags pending orders within 4 hours of that auto-cancel, and the
+navigation shows how many are pending. Its filters (status, pickup dates, search) and sort live in the
+URL. `npm run dev:mock` starts with demo orders ([src/mocks/demo-orders.ts](src/mocks/demo-orders.ts)),
+placed relative to the current time; tests start with none.
+
 ### Errors
 
 Every error has the same JSON body:
