@@ -86,21 +86,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Start the backend
-        run: npm run e2e:backend
+      # The site as it is deployed: this repository's image behind the server's own Caddyfile, one origin.
+      - name: Start the backend and the production image
+        run: npm run e2e:production:up
         env:
           SERVER_DIR: ../profound-baker-server
 
       - name: Install the browser
         run: npx playwright install --with-deps chromium
 
-      # Playwright builds and serves the SPA itself (npm run e2e:serve).
       - name: End-to-end tests
-        run: npm run e2e
+        run: npm run e2e:production
 
       - name: Backend logs
         if: failure()
-        run: docker compose -f e2e/compose.yaml logs app
+        run: docker compose -f e2e/compose.yaml --profile production logs app edge
 
       - name: Upload the Playwright report
         if: failure()

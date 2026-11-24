@@ -1,0 +1,15 @@
+# Only what `vite build` needs goes into the image's build stage.
+.git
+.github
+.claude
+node_modules
+dist
+coverage
+test-results
+playwright-report
+blob-report
+e2e
+docs
+openapi
+*.local
+.env.mock

@@ -1,0 +1,43 @@
+# The web app's own server, inside its image: serves the built SPA on port 80 to the reverse proxy in
+# front of it (profound-baker-server's Caddy, which terminates TLS and routes /api to the backend).
+# Everything here travels with the build, so a new image can't ship with the wrong headers.
+
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:80 {
+	root * /srv
+
+	header {
+		# Same origin as the API (one domain), so 'self' covers every request the app makes.
+		# blob: and data: are item photo previews before upload.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# Vite's output under /assets has a content hash in every name: cache it for a year. A missing
+	# asset is a real 404, never index.html (which would be parsed as a script and break the page).
+	handle /assets/* {
+		@exists file
+		header @exists Cache-Control "public, max-age=31536000, immutable"
+		@missing not file
+		header @missing Cache-Control "no-store"
+		file_server
+	}
+
+	# Everything else: a file if there is one (favicon.svg), otherwise index.html, so a reload on a
+	# client-side route (/orders/<token>, /owner/invoices/…) still opens the app. Always revalidated,
+	# so a deploy reaches everyone on their next visit.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -85,23 +85,25 @@ Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets i
 
 ### Scripts
 
-| Command                           | What it does                                          |
-| --------------------------------- | ----------------------------------------------------- |
-| `npm run dev`                     | Start the dev server with hot reload on port 5173     |
-| `npm run dev:mock`                | Same, with the API mocked: no backend needed          |
-| `npm run build`                   | Type-check, then build for production into `dist/`    |
-| `npm run preview`                 | Serve the production build locally                    |
-| `npm run typecheck`               | Type-check only                                       |
-| `npm run lint`                    | Lint with oxlint; warnings fail                       |
-| `npm run format` / `format:check` | Format with Prettier / check formatting               |
-| `npm test`                        | Run the tests once (Vitest + React Testing Library)   |
-| `npm run test:watch`              | Run the tests in watch mode                           |
-| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/`   |
-| `npm run e2e:backend`             | Start the backend for the end-to-end tests (Docker)   |
-| `npm run e2e`                     | Run the end-to-end tests (Playwright)                 |
-| `npm run e2e:backend:down`        | Stop that backend and drop its data                   |
-| `npm run api:types`               | Refresh the API spec and types from a running backend |
-| `npm run api:check`               | Check the API types match the committed spec          |
+| Command                           | What it does                                              |
+| --------------------------------- | --------------------------------------------------------- |
+| `npm run dev`                     | Start the dev server with hot reload on port 5173         |
+| `npm run dev:mock`                | Same, with the API mocked: no backend needed              |
+| `npm run build`                   | Type-check, then build for production into `dist/`        |
+| `npm run preview`                 | Serve the production build locally                        |
+| `npm run typecheck`               | Type-check only                                           |
+| `npm run lint`                    | Lint with oxlint; warnings fail                           |
+| `npm run format` / `format:check` | Format with Prettier / check formatting                   |
+| `npm test`                        | Run the tests once (Vitest + React Testing Library)       |
+| `npm run test:watch`              | Run the tests in watch mode                               |
+| `npm run test:coverage`           | Run the tests with a coverage report in `coverage/`       |
+| `npm run e2e:backend`             | Start the backend for the end-to-end tests (Docker)       |
+| `npm run e2e`                     | Run the end-to-end tests (Playwright)                     |
+| `npm run e2e:production:up`       | Also start the production image behind the server's Caddy |
+| `npm run e2e:production`          | Run the end-to-end tests against that production stack    |
+| `npm run e2e:backend:down`        | Stop that backend and drop its data                       |
+| `npm run api:types`               | Refresh the API spec and types from a running backend     |
+| `npm run api:check`               | Check the API types match the committed spec              |
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `format:check`, `lint`, `api:check`,
 `typecheck`, `test:coverage` and `build` on every push and pull request, and the end-to-end tests
@@ -188,6 +190,11 @@ npm run e2e:backend      # build and start it on :8080; waits until it is health
 npm run e2e              # builds the SPA with VITE_API_BASE_URL=http://localhost:8080, serves it on :4173
 npm run e2e:backend:down # stop it; the data goes with it
 ```
+
+**Against the production image.** `npm run e2e:production:up` also builds this repository's image
+and runs it behind the server's own Caddyfile on <http://localhost:8081>, with one origin and the
+real routing, headers and CSP. `npm run e2e:production` runs the same tests there, which is what CI
+does. Every test fails if the page logs a Content Security Policy violation.
 
 Locally the tests use the installed Chrome; CI installs Playwright's Chromium. A failing test
 leaves a trace in `test-results/` (`npx playwright show-trace <file>`). In CI the backend's logs
@@ -421,15 +428,69 @@ only needs one edit.
 
 ## Deployment
 
-1. Build with `npm run build` and serve `dist/` from any static host.
-2. Configure the host to serve `index.html` for unknown paths, so client-side routes such as magic links
-   still work after a page reload.
-3. Set `VITE_API_BASE_URL` to the production API **at build time**, because Vite inlines it into the bundle.
-4. Add the front end's origin to `APP_CORS_ALLOWED_ORIGINS` on the server. It takes exact,
-   comma-separated origins with no wildcards.
+The site runs on the server's VPS, on the same domain as the API: profound-baker-server's Caddy
+terminates TLS and sends `/api/*`, `/.well-known/*` and `/uploads/*` to the backend, and every other
+path to this repository's image (the `web` service in the server's `docker-compose.prod.yml`). One
+origin, so the browser needs no CORS and the bundle is built with an empty `VITE_API_BASE_URL`.
 
-See the [server's deployment guide](https://github.com/WARHE8D/profound-baker-server#deploy) for running the
-API, which uses Docker Compose with Caddy for TLS.
+**The image** ([Dockerfile](Dockerfile)) is the built SPA served by Caddy with
+[deploy/Caddyfile](deploy/Caddyfile):
+
+- **SPA fallback:** any path that isn't a file gets `index.html`, so reloading `/orders/<token>` or an
+  owner page works. A missing `/assets/*` file is a real 404.
+- **Caching:** `/assets/*` (content-hashed names) is cached for a year, `immutable`. `index.html` and
+  the rest are `no-cache`, so a deploy reaches everyone on their next visit.
+- **Security headers:** a Content Security Policy that allows only the site itself (`default-src`,
+  `script-src`, `style-src` and `connect-src` all `'self'`; `blob:`/`data:` images for photo
+  previews; no framing), plus `nosniff`, `Referrer-Policy`, `Permissions-Policy` and
+  `Cross-Origin-Opener-Policy`. HSTS comes from the server's Caddy.
+
+**The pipeline** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)): when CI passes on
+`main` (including the end-to-end tests, which run against this image behind the server's Caddyfile),
+the image is pushed to `ghcr.io/warhe8d/profound-baker-web` as `:latest` and `:<commit sha>`. If the
+server is configured, the workflow then pulls that SHA there, restarts `web`, and checks the live
+site (a page, a client-side route, the API, and the CSP header).
+
+### Runbook
+
+**Set up (once).**
+
+1. On GitHub: Packages → `profound-baker-web` → Package settings → make it public, or run
+   `docker login ghcr.io` on the server with a token that can read packages.
+2. On the server, the backend's stack as its README describes, with
+   `APP_CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>` (same origin as the API).
+3. To have merges roll out by themselves, add to this repository (Settings → Secrets and variables →
+   Actions):
+
+   | Name                 | Kind     | Value                                                   |
+   | -------------------- | -------- | ------------------------------------------------------- |
+   | `DEPLOY_HOST`        | secret   | The server's host name                                  |
+   | `DEPLOY_USER`        | secret   | An SSH user allowed to run `docker compose`             |
+   | `DEPLOY_SSH_KEY`     | secret   | That user's private key (a key used for nothing else)   |
+   | `DEPLOY_KNOWN_HOSTS` | secret   | The output of `ssh-keyscan <host>`                      |
+   | `DEPLOY_PATH`        | secret   | The server repository's folder on the server            |
+   | `SITE_URL`           | variable | `https://<APP_DOMAIN>`, for the check after the rollout |
+
+   Without `DEPLOY_HOST`, the workflow only publishes the image.
+
+**Deploy.** Merge to `main`. Without the secrets, on the server:
+
+```sh
+docker compose -f docker-compose.prod.yml pull web
+docker compose -f docker-compose.prod.yml up -d --wait web
+```
+
+**Roll back.** Run the Deploy workflow by hand (Actions → Deploy → Run workflow) on an older commit
+of `main`. Or, on the server, pin the build you want with its commit SHA:
+`WEB_IMAGE_TAG=<sha> docker compose -f docker-compose.prod.yml up -d --wait web`, and set
+`WEB_IMAGE_TAG` in `.env` to keep it there.
+
+**Check by hand.**
+`curl -sI https://<APP_DOMAIN>/orders/x` should answer `200` with a `Content-Security-Policy`
+header, and `curl -s https://<APP_DOMAIN>/api/public/bakery` should return the bakery's JSON.
+
+**Try it locally.** `npm run e2e:production:up` builds the image and runs it behind the server's
+Caddyfile on <http://localhost:8081> (see [End-to-end tests](#end-to-end-tests)).
 
 ## Related
 

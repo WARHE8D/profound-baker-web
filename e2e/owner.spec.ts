@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 import { placeOrder, seedBakery, type PlacedOrder } from './support/api'
 import { OWNER, SEED } from './support/env'
 

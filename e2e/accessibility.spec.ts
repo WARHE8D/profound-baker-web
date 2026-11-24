@@ -1,5 +1,5 @@
 import { AxeBuilder } from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from './support/test'
 import { confirmOrder, placeOrder, seedBakery, type Item, type PlacedOrder } from './support/api'
 import { fillCart, signInAsOwner } from './support/browser'
 

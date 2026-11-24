@@ -2,6 +2,10 @@
 #   SERVER_DIR=../profound-baker-server docker compose -f e2e/compose.yaml up -d --build --wait
 # SERVER_DIR is a checkout of the server repository, relative to this file's folder or absolute.
 # The database lives in memory (tmpfs): `down` and `up` again start from an empty bakery.
+#
+# With `--profile production`, also the site as it is deployed: this repository's image (Dockerfile)
+# behind the server's own Caddyfile, on http://localhost:8081: one origin, the real routing, headers
+# and CSP. Run the tests against it with E2E_APP_URL=http://localhost:8081 (npm run e2e:production).
 
 name: sugarcrumbs-e2e
 
@@ -33,7 +37,7 @@ services:
       DB_PASSWORD: baker-e2e
       APP_STORAGE_PATH: /data/uploads
       # The built SPA, served by `npm run e2e:serve`.
-      APP_CORS_ALLOWED_ORIGINS: http://localhost:4173
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:4173,http://localhost:8081
       # Must match e2e/support/env.ts.
       APP_OWNER_EMAIL: owner@e2e.test
       APP_OWNER_INITIAL_PASSWORD: e2e-owner-password
@@ -44,4 +48,35 @@ services:
       APP_RATE_LIMIT_MAGIC_LINK_CAPACITY: 1000
     ports:
       - '8080:8080'
+    volumes:
+      - uploads:/data/uploads
     # Ready when the image's health check (Actuator readiness) passes; `up --wait` waits for it.
+
+  web:
+    profiles: [production]
+    build: ..
+    read_only: true
+    tmpfs:
+      - /data
+      - /config
+
+  # The server's production Caddyfile, on plain HTTP: a site address with a scheme and port turns
+  # automatic HTTPS off.
+  edge:
+    profiles: [production]
+    image: caddy:2-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      APP_DOMAIN: http://localhost:8081
+    volumes:
+      - ${SERVER_DIR:-../../profound-baker-server}/infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - uploads:/srv/uploads:ro
+    ports:
+      - '8081:8081'
+
+volumes:
+  uploads:
