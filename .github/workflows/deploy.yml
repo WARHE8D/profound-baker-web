@@ -1,0 +1,99 @@
+# Publishes the production image (Dockerfile) to GHCR after CI passes on main, then, when the server
+# is configured (DEPLOY_* secrets), rolls it out there and checks the live site. Runbook: README.md,
+# "Deployment".
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # Re-run by hand, e.g. to roll back: run it on an older commit of main.
+  workflow_dispatch:
+
+# One deploy at a time; a newer one waits rather than cancelling a rollout halfway.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/warhe8d/profound-baker-web
+
+jobs:
+  publish:
+    name: publish image
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - name: Checkout the commit CI passed
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Commit
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build
+        run: >
+          docker build
+          --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          --label org.opencontainers.image.revision=${{ steps.sha.outputs.sha }}
+          -t "$IMAGE:${{ steps.sha.outputs.sha }}" -t "$IMAGE:latest" .
+
+      - name: Push
+        run: |
+          docker push "$IMAGE:${{ steps.sha.outputs.sha }}"
+          docker push "$IMAGE:latest"
+
+  rollout:
+    name: roll out
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+    steps:
+      - name: Not configured
+        if: env.DEPLOY_HOST == ''
+        run: echo "::notice::No DEPLOY_HOST secret; image published, not rolled out. See README.md, Deployment."
+
+      - name: Pull and restart the web service on the server
+        if: env.DEPLOY_HOST != ''
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SHA: ${{ needs.publish.outputs.sha }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # The exact build CI passed, by its SHA; `latest` is the same image.
+          ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && export WEB_IMAGE_TAG='$SHA' \
+             && docker compose -f docker-compose.prod.yml pull web \
+             && docker compose -f docker-compose.prod.yml up -d --wait web"
+
+      - name: Check the live site
+        if: env.DEPLOY_HOST != '' && vars.SITE_URL != ''
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          # A page, a client-side route (the SPA fallback) and the API, through the real proxy.
+          for path in / /orders/check /api/public/bakery; do
+            curl -fsS -o /dev/null --retry 5 --retry-all-errors --retry-delay 3 "$SITE_URL$path"
+          done
+          curl -fsSI "$SITE_URL/" | grep -i '^content-security-policy:'

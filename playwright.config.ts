@@ -34,11 +34,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], ...(CI ? {} : { channel: 'chrome' }) },
     },
   ],
-  webServer: {
-    command: 'npm run e2e:serve',
-    url: APP_URL,
-    reuseExistingServer: !CI,
-    timeout: 120_000,
-    env: { VITE_API_BASE_URL: API_URL },
-  },
+  // Given E2E_APP_URL, the app is already served (the production image, npm run e2e:production).
+  webServer: process.env.E2E_APP_URL
+    ? undefined
+    : {
+        command: 'npm run e2e:serve',
+        url: APP_URL,
+        reuseExistingServer: !CI,
+        timeout: 120_000,
+        env: { VITE_API_BASE_URL: API_URL },
+      },
 })

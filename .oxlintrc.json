@@ -36,7 +36,7 @@
   },
   "overrides": [
     {
-      "files": ["scripts/**/*.mjs", "e2e/**", "playwright.config.ts"],
+      "files": ["scripts/**/*.mjs", "e2e/**", "playwright*.config.ts"],
       "env": {
         "node": true,
         "browser": false
