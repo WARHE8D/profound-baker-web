@@ -27,6 +27,9 @@
   --warning: #9a5a00;
 
   --ring: #c2621a;
+
+  /* Chart marks: checked for lightness and 3:1 contrast against the surface (dataviz validator). */
+  --chart: #9a4a12;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,6 +54,8 @@
     --warning: #f5b84a;
 
     --ring: #f0a35e;
+
+    --chart: #c97a3a;
   }
 }
 
@@ -73,6 +78,7 @@
   --color-warning: var(--warning);
 
   --color-ring: var(--ring);
+  --color-chart: var(--chart);
 }
 
 @theme {
