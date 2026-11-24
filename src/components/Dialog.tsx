@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
+import { focusPageHeading } from './page-focus'
 
 type DialogProps = {
   open: boolean
@@ -14,9 +15,10 @@ type DialogProps = {
 }
 
 /**
- * Modal dialog on the native <dialog> element: the browser traps focus, closes on Esc and returns
- * focus to the element that opened it. A dialog rendered only while open (`{open && <Dialog …>}`)
- * is removed rather than closed, so it returns focus itself.
+ * Modal dialog on the native <dialog> element: the browser traps focus and closes it on Esc.
+ * Closing (or removing it while open) gives focus back to the element that opened it, or, when
+ * the action removed that element (a "Cancel order" button once the order is cancelled), to the
+ * page's heading, rather than leaving it nowhere.
  */
 export function Dialog({
   open,
@@ -39,15 +41,17 @@ export function Dialog({
       opener.current = document.activeElement
       dialog.showModal()
     }
-    if (!open && dialog.open) dialog.close()
+    if (!open && dialog.open) {
+      dialog.close()
+      returnFocus(opener.current)
+    }
   }, [open])
 
-  // Removed while open: back to the opener, if it is still there (else RouteFocus takes over).
+  // Removed while open (`{open && <Dialog …>}`): never closed, so nothing would move focus.
   useEffect(() => {
     const dialog = ref.current
     return () => {
-      const back = opener.current
-      if (dialog?.open && back instanceof HTMLElement && back.isConnected) back.focus()
+      if (dialog?.open) returnFocus(opener.current)
     }
   }, [])
 
@@ -101,4 +105,9 @@ export function Dialog({
       </div>
     </dialog>
   )
+}
+
+function returnFocus(opener: Element | null) {
+  if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+  else focusPageHeading()
 }

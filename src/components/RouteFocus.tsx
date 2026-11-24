@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router'
+import { focusPageHeading } from './page-focus'
 
 export const APP_NAME = 'SugarCrumbs'
 
@@ -64,10 +65,7 @@ export function RouteFocus() {
         // Removed, or in a dialog that has closed with nothing to give focus back to.
         (!lastFocused.isConnected || lastFocused.closest('dialog:not([open])') !== null)
       // On navigation, only if nothing took focus while the page was loading.
-      if ((focusPending && document.activeElement === main) || focusLost) {
-        heading.tabIndex = -1
-        heading.focus({ preventScroll: true })
-      }
+      if ((focusPending && document.activeElement === main) || focusLost) focusPageHeading()
       focusPending = false
     }
 

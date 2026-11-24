@@ -87,3 +87,39 @@ test('rendered only while open, it still gives focus back to the button that ope
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(opener).toHaveFocus()
 })
+
+function CancelOnce() {
+  const [open, setOpen] = useState(false)
+  const [cancelled, setCancelled] = useState(false)
+  return (
+    <main id="main">
+      <h1>Order SC-1</h1>
+      {!cancelled && <Button onClick={() => setOpen(true)}>Cancel order</Button>}
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Cancel this order?"
+        footer={
+          <Button
+            onClick={() => {
+              // As the real dialog does: the order updates and the dialog closes in one render.
+              setCancelled(true)
+              setOpen(false)
+            }}
+          >
+            Yes, cancel
+          </Button>
+        }
+      />
+    </main>
+  )
+}
+
+test('when its action removes the button that opened it, focus goes to the page heading', async () => {
+  render(<CancelOnce />)
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel order' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Yes, cancel' }))
+
+  expect(screen.queryByRole('button', { name: 'Cancel order' })).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
+})
