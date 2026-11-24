@@ -1,0 +1,47 @@
+# The backend for the end-to-end tests: profound-baker-server and a throwaway Postgres.
+#   SERVER_DIR=../profound-baker-server docker compose -f e2e/compose.yaml up -d --build --wait
+# SERVER_DIR is a checkout of the server repository, relative to this file's folder or absolute.
+# The database lives in memory (tmpfs): `down` and `up` again start from an empty bakery.
+
+name: sugarcrumbs-e2e
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: baker
+      POSTGRES_USER: baker
+      POSTGRES_PASSWORD: baker-e2e
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U baker -d baker']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build: ${SERVER_DIR:-../../profound-baker-server}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Not `prod`: no fixed JWT key is needed (a throwaway one is made at startup).
+      SPRING_PROFILES_ACTIVE: e2e
+      DB_URL: jdbc:postgresql://postgres:5432/baker
+      DB_USERNAME: baker
+      DB_PASSWORD: baker-e2e
+      APP_STORAGE_PATH: /data/uploads
+      # The built SPA, served by `npm run e2e:serve`.
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:4173
+      # Must match e2e/support/env.ts.
+      APP_OWNER_EMAIL: owner@e2e.test
+      APP_OWNER_INITIAL_PASSWORD: e2e-owner-password
+      APP_OWNER_TIME_ZONE: America/New_York
+      # Every test signs in or checks out from the same address: lift the per-IP limits.
+      APP_RATE_LIMIT_LOGIN_CAPACITY: 1000
+      APP_RATE_LIMIT_CHECKOUT_CAPACITY: 1000
+      APP_RATE_LIMIT_MAGIC_LINK_CAPACITY: 1000
+    ports:
+      - '8080:8080'
+    # Ready when the image's health check (Actuator readiness) passes; `up --wait` waits for it.

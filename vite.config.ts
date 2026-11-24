@@ -1,10 +1,10 @@
-/// <reference types="vitest/config" />
 import { rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
+import { configDefaults } from 'vitest/config'
 
 /**
  * public/mockServiceWorker.js serves `npm run dev:mock`. Production builds never register it, so
@@ -36,6 +36,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // e2e/ is Playwright's (npm run e2e).
+    exclude: [...configDefaults.exclude, 'e2e/**'],
     // .env.local is not loaded in test mode; give the API client a fixed origin for MSW handlers.
     env: { VITE_API_BASE_URL: 'http://localhost:8080' },
     restoreMocks: true,

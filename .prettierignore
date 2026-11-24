@@ -1,5 +1,7 @@
 dist
 coverage
+test-results
+playwright-report
 package-lock.json
 # Generated (npm run api:types)
 openapi/openapi.json
