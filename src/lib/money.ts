@@ -55,3 +55,18 @@ function arithmeticDigits(currency: string): number {
       .maximumFractionDigits ?? 2
   return Math.max(2, display)
 }
+
+/** The server stores amounts as DECIMAL(10, 2): at most 8 whole digits and 2 decimals. */
+const AMOUNT_PATTERN = /^\d{1,8}(\.\d{1,2})?$/
+
+/**
+ * Reads a typed amount: "3.5", "3,50", "$ 1,234.50" → a number, or null if it isn't one. A comma
+ * is a decimal separator only when there is no dot and it is followed by 1–2 digits at the end.
+ */
+export function parseMoney(text: string): number | null {
+  let cleaned = text.replace(/[^\d.,]/g, '')
+  if (!cleaned.includes('.') && /,\d{1,2}$/.test(cleaned)) cleaned = cleaned.replace(',', '.')
+  cleaned = cleaned.replaceAll(',', '')
+  if (!AMOUNT_PATTERN.test(cleaned)) return null
+  return Number(cleaned)
+}

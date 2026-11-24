@@ -1,11 +1,11 @@
 // Orders for `npm run dev:mock`, so the Owner's pages have something to show: a few that need
 // action (one about to be auto-cancelled), today's pickups, and a history that runs over a page.
-// Times are relative to now. Tests start with no orders and add their own.
+// Times are relative to now. Tests start with no orders and add their own (seedDemo adds all).
 import type { Schema } from '@/api'
 import { addDays } from '@/lib/date'
 import { slotToUtc, todayIn } from '@/lib/time'
 import { FIXTURE_TIME_ZONE, items } from './fixtures'
-import type { StoredOrder } from './store'
+import type { MockStore, StoredOrder } from './store'
 
 const HOUR = 3_600_000
 
@@ -120,6 +120,30 @@ export function demoOrders(now: Date): StoredOrder[] {
       createdAt,
       updatedAt: createdAt,
       accessToken: `mock-token-demo-${n}`,
+    }
+  })
+}
+
+/**
+ * Seeds the demo orders and settles their invoices the way a real history would look: picked-up
+ * orders paid (cash or bank transfer, one with a discount), one refunded; open ones unpaid.
+ */
+export function seedDemo(store: MockStore) {
+  demoOrders(store.now()).forEach((order) => store.seed(order))
+  const fulfilled = store.orders.filter((o) => o.status === 'FULFILLED')
+  fulfilled.forEach((order, index) => {
+    let invoice = store.invoiceForOrder(order.id)!
+    if (index === 2) invoice = store.updateInvoice(invoice, { discountAmount: 1 })
+    const byTransfer = index % 3 === 1
+    invoice = store.updateInvoice(invoice, {
+      status: 'PAID',
+      paymentMethod: byTransfer ? 'BANK_TRANSFER' : 'CASH',
+      paymentReference: byTransfer ? `TRF-${String(48_210 + index * 7)}` : null,
+      paidAt: order.pickupAt,
+    })
+    if (index === 4) {
+      const refundedAt = new Date(Date.parse(order.pickupAt) + 26 * HOUR).toISOString()
+      store.updateInvoice(invoice, { status: 'REFUNDED', refundedAt })
     }
   })
 }

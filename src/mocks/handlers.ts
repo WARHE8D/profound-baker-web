@@ -26,6 +26,8 @@ const isOwner = (request: Request) =>
 /** OrderProperties' defaults: distinct items per order, and units of one item. */
 const MAX_ORDER_LINES = 20
 const MAX_LINE_QUANTITY = 100
+/** InvoiceService.MAX_SEARCH_LENGTH. */
+const INVOICE_SEARCH_MAX = 50
 /** Statuses an order can still be rescheduled in. */
 const OPEN_STATUSES: StoredOrder['status'][] = ['PENDING', 'CONFIRMED', 'IN_PROGRESS']
 
@@ -91,6 +93,18 @@ export function createHandlers(store: MockStore): HttpHandler[] {
     const order = store.findById(String(params.id))
     if (!order) return apiError(request, 404, `Order not found: ${String(params.id)}`)
     return handle(order)
+  }
+
+  /** Runs `handle` on the invoice in the path, after the Owner and 404 checks. */
+  function withInvoice(
+    request: Request,
+    params: Record<string, unknown>,
+    handle: (invoice: Schema<'InvoiceResponse'>) => Response,
+  ) {
+    if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+    const invoice = store.findInvoice(String(params.id))
+    if (!invoice) return apiError(request, 404, `Invoice not found: ${String(params.id)}`)
+    return handle(invoice)
   }
 
   /** Order's guard: "cannot confirm an order in status CANCELLED". */
@@ -877,6 +891,136 @@ export function createHandlers(store: MockStore): HttpHandler[] {
       }
       return HttpResponse.json(invoice)
     }),
+
+    // ---- Invoices ----
+    http.get(api('/api/invoices'), ({ request }) => {
+      if (!isOwner(request)) return apiError(request, 401, 'authentication required')
+      const params = new URL(request.url).searchParams
+      const statuses = params.getAll('status')
+      const query = params.get('q')?.trim().toLowerCase() ?? ''
+      // An issue range: from inclusive, to exclusive, either end open (instants).
+      const from = params.get('from')
+      const to = params.get('to')
+      if (from && to && Date.parse(from) >= Date.parse(to)) {
+        return apiError(request, 400, 'from must be before to')
+      }
+      if (query.length > INVOICE_SEARCH_MAX) {
+        return apiError(request, 400, `search may be at most ${INVOICE_SEARCH_MAX} characters`)
+      }
+      // Like the server: newest first unless asked otherwise. issuedAt is the entity's createdAt.
+      const [field = 'createdAt', dir = 'desc'] = (params.get('sort') ?? 'createdAt,desc').split(
+        ',',
+      )
+      const sortKey = { createdAt: 'issuedAt', number: 'number' }[field] as
+        'issuedAt' | 'number' | undefined
+      if (!sortKey) return apiError(request, 400, `cannot sort by '${field}'`)
+      const direction = dir.toLowerCase() === 'asc' ? 1 : -1
+      const list = store.invoices
+        .filter((i) => statuses.length === 0 || statuses.includes(i.status))
+        .filter(
+          (i) =>
+            (!from || Date.parse(i.issuedAt) >= Date.parse(from)) &&
+            (!to || Date.parse(i.issuedAt) < Date.parse(to)),
+        )
+        .filter(
+          (i) =>
+            !query ||
+            i.number.toLowerCase().includes(query) ||
+            i.orderReference.toLowerCase().includes(query),
+        )
+        .toSorted((x, y) => x[sortKey].localeCompare(y[sortKey]) * direction)
+      const page: Schema<'PageInvoiceResponse'> = springPage(list, params)
+      return HttpResponse.json(page)
+    }),
+
+    http.get(api('/api/invoices/:id'), ({ request, params }) =>
+      withInvoice(request, params, (invoice) => HttpResponse.json(invoice)),
+    ),
+
+    http.patch(api('/api/invoices/:id/discount'), async ({ request, params }) => {
+      const body = (await request.json()) as Partial<Schema<'DiscountRequest'>>
+      const amount = body.amount
+      // DiscountRequest: @NotNull @DecimalMin("0.00") @Digits(integer = 8, fraction = 2).
+      if (typeof amount !== 'number') {
+        return apiError(request, 400, 'validation failed', [
+          { field: 'amount', message: 'must not be null' },
+        ])
+      }
+      if (amount < 0) {
+        return apiError(request, 400, 'validation failed', [
+          { field: 'amount', message: 'must be greater than or equal to 0.00' },
+        ])
+      }
+      if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-6 || amount >= 1e8) {
+        return apiError(request, 400, 'validation failed', [
+          {
+            field: 'amount',
+            message: 'numeric value out of bounds (<8 digits>.<2 digits> expected)',
+          },
+        ])
+      }
+      return withInvoice(request, params, (invoice) => {
+        if (invoice.status !== 'PENDING') {
+          return apiError(
+            request,
+            400,
+            `cannot change discount on an invoice in status ${invoice.status}`,
+          )
+        }
+        if (amount > invoice.subtotal) {
+          return apiError(request, 400, 'discount cannot exceed subtotal')
+        }
+        return HttpResponse.json(store.updateInvoice(invoice, { discountAmount: amount }))
+      })
+    }),
+
+    http.patch(api('/api/invoices/:id/pay'), async ({ request, params }) => {
+      const body = (await request.json()) as Partial<Schema<'PaymentRequest'>>
+      const errors: FieldError[] = []
+      if (body.method !== 'CASH' && body.method !== 'BANK_TRANSFER') {
+        errors.push({ field: 'method', message: 'must not be null' })
+      }
+      if ((body.reference ?? '').length > 200) {
+        errors.push({ field: 'reference', message: 'size must be between 0 and 200' })
+      }
+      if (body.paidAt && Date.parse(body.paidAt) > store.now().getTime()) {
+        errors.push({ field: 'paidAt', message: 'must be a date in the past or in the present' })
+      }
+      if (errors.length > 0) return apiError(request, 400, 'validation failed', errors)
+      return withInvoice(request, params, (invoice) => {
+        if (invoice.status !== 'PENDING') {
+          return apiError(request, 400, `cannot mark paid an invoice in status ${invoice.status}`)
+        }
+        const reference = body.reference?.trim() ? body.reference.trim() : null
+        if (body.method === 'BANK_TRANSFER' && !reference) {
+          return apiError(request, 400, 'a bank transfer needs its reference')
+        }
+        const paid = store.updateInvoice(invoice, {
+          status: 'PAID',
+          paymentMethod: body.method!,
+          paymentReference: reference,
+          paidAt: body.paidAt ?? store.now().toISOString(),
+        })
+        return HttpResponse.json(paid)
+      })
+    }),
+
+    http.patch(api('/api/invoices/:id/refund'), ({ request, params }) =>
+      withInvoice(request, params, (invoice) => {
+        if (invoice.status !== 'PAID') {
+          return apiError(
+            request,
+            400,
+            `only a paid invoice can be refunded (current status: ${invoice.status})`,
+          )
+        }
+        const refunded = store.updateInvoice(invoice, {
+          status: 'REFUNDED',
+          refundedAt: store.now().toISOString(),
+        })
+        return HttpResponse.json(refunded)
+      }),
+    ),
 
     // ---- Uploaded images: a generated placeholder per item ----
     http.get(`${apiBaseUrl}/uploads/items/:file`, ({ params }) => {

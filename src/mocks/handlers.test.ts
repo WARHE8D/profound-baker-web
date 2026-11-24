@@ -9,10 +9,11 @@ import {
   setAccessTokenProvider,
   unwrap,
   type operations,
+  type paths,
   type Schema,
 } from '@/api'
 import { slotToUtc } from '@/lib/time'
-import { demoOrders } from './demo-orders'
+import { demoOrders, seedDemo } from './demo-orders'
 import { imageFile, pngBytes } from '@/test/images'
 import { mockStore } from '@/test/msw/handlers'
 import { FIXTURE_OWNER_CREDENTIALS, FIXTURE_TIME_ZONE, ids } from './fixtures'
@@ -385,6 +386,84 @@ const id = (n: string) => `d0000000-0000-4000-8000-000000000${n}`
 const path = (n: string) => ({ params: { path: { id: id(n) } } })
 const putNotes = (n: string, notes: string) =>
   unwrap(api.PUT('/api/orders/{id}/notes', { ...path(n), body: { notes } }))
+
+/** A demo order's invoice, and its path params. */
+const invoiceOf = (n: string) => mockStore.invoiceForOrder(id(n))!
+const invoicePath = (n: string) => ({ params: { path: { id: invoiceOf(n).id } } })
+const listInvoices = (query: NonNullable<paths['/api/invoices']['get']['parameters']['query']>) =>
+  unwrap(api.GET('/api/invoices', { params: { query } })).then(readPage)
+const discount = (n: string, amount: number) =>
+  unwrap(api.PATCH('/api/invoices/{id}/discount', { ...invoicePath(n), body: { amount } }))
+const pay = (body: Schema<'PaymentRequest'>) =>
+  unwrap(api.PATCH('/api/invoices/{id}/pay', { ...invoicePath('004'), body }))
+const refund = (n: string) => unwrap(api.PATCH('/api/invoices/{id}/refund', invoicePath(n)))
+
+describe('invoices', () => {
+  beforeEach(async () => {
+    seedDemo(mockStore)
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('lists newest first; filters by status, issue range and number or order reference', async () => {
+    const all = await listInvoices({})
+    expect(all.totalElements).toBe(21)
+    expect(all.items[0]!.orderReference).toBe('SC-D006')
+    expect(
+      (await listInvoices({ status: ['REFUNDED'] })).items.map((i) => i.orderReference),
+    ).toEqual(['SC-D013'])
+    expect((await listInvoices({ q: 'sc-d01' })).totalElements).toBe(10)
+    expect((await listInvoices({ q: 'INV-2026-0001' })).items).toHaveLength(1)
+    const byNumber = await listInvoices({ sort: ['number,asc'], size: 2 })
+    expect(byNumber.items.map((i) => i.number)).toEqual(['INV-2026-0001', 'INV-2026-0002'])
+    expect(
+      await failure(listInvoices({ from: '2026-11-20T00:00:00Z', to: '2026-11-19T00:00:00Z' })),
+    ).toMatchObject({ status: 400, message: 'from must be before to' })
+    expect(await failure(listInvoices({ q: 'x'.repeat(51) }))).toMatchObject({ status: 400 })
+    expect(await failure(listInvoices({ sort: ['total,asc'] }))).toMatchObject({ status: 400 })
+  })
+
+  test('a discount: only while unpaid, never more than the subtotal, cents at most', async () => {
+    expect(await discount('004', 0.1)).toMatchObject({ discountAmount: 0.1, total: 18.15 })
+    expect(await discount('004', 0)).toMatchObject({ discountAmount: 0, total: 18.25 })
+    expect(await failure(discount('004', 18.26))).toMatchObject({
+      status: 400,
+      message: 'discount cannot exceed subtotal',
+    })
+    expect(await failure(discount('004', 1.005))).toMatchObject({
+      status: 400,
+      fieldErrors: [{ field: 'amount' }],
+    })
+    expect(await failure(discount('009', 1))).toMatchObject({
+      status: 400,
+      message: 'cannot change discount on an invoice in status PAID',
+    })
+  })
+
+  test('a payment: a transfer needs its reference, never in the future; then a refund', async () => {
+    expect(await failure(pay({ method: 'BANK_TRANSFER', reference: ' ' }))).toMatchObject({
+      status: 400,
+      message: 'a bank transfer needs its reference',
+    })
+    expect(
+      await failure(
+        pay({ method: 'CASH', paidAt: new Date(NOW.getTime() + 60_000).toISOString() }),
+      ),
+    ).toMatchObject({ status: 400, fieldErrors: [{ field: 'paidAt' }] })
+    expect(await pay({ method: 'CASH', reference: ' till 2 ' })).toMatchObject({
+      status: 'PAID',
+      paymentReference: 'till 2',
+      paidAt: NOW.toISOString(),
+    })
+    expect(await failure(pay({ method: 'CASH' }))).toMatchObject({ status: 400 })
+
+    expect(await refund('004')).toMatchObject({ status: 'REFUNDED', refundedAt: NOW.toISOString() })
+    expect(await failure(refund('005'))).toMatchObject({
+      status: 400,
+      message: 'only a paid invoice can be refunded (current status: PENDING)',
+    })
+  })
+})
 
 describe('owner order changes', () => {
   beforeEach(async () => {

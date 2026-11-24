@@ -133,6 +133,9 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     get orders(): readonly StoredOrder[] {
       return orders
     },
+    get invoices(): readonly Schema<'InvoiceResponse'>[] {
+      return invoices
+    },
     /** The Owner's profile, as edited through PUT /api/owner/profile. */
     get profile(): Schema<'OwnerProfileResponse'> {
       return profile
@@ -288,8 +291,8 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     },
 
     /** Issues the order's invoice, numbered INV-<year>-NNNN like InvoiceService. */
-    issueInvoice(order: StoredOrder): Schema<'InvoiceResponse'> {
-      const year = todayIn(FIXTURE_TIME_ZONE, now()).slice(0, 4)
+    issueInvoice(order: StoredOrder, issuedAt: Date = now()): Schema<'InvoiceResponse'> {
+      const year = todayIn(FIXTURE_TIME_ZONE, issuedAt).slice(0, 4)
       const invoice: Schema<'InvoiceResponse'> = {
         id: nextId('60000000'),
         number: `INV-${year}-${String(invoices.length + 1).padStart(4, '0')}`,
@@ -303,13 +306,28 @@ export function createMockStore(options: { now?: () => Date } = {}) {
         paymentReference: null,
         paidAt: null,
         refundedAt: null,
-        issuedAt: now().toISOString(),
+        issuedAt: issuedAt.toISOString(),
       }
       invoices = [...invoices, invoice]
       return invoice
     },
 
     invoiceForOrder: (orderId: string) => invoices.find((i) => i.orderId === orderId),
+    findInvoice: (id: string) => invoices.find((i) => i.id === id),
+
+    /** Replaces the stored invoice with `changes` applied; the total follows the discount. */
+    updateInvoice(
+      invoice: Schema<'InvoiceResponse'>,
+      changes: Partial<Schema<'InvoiceResponse'>>,
+    ): Schema<'InvoiceResponse'> {
+      const next = { ...invoice, ...changes }
+      const updated = {
+        ...next,
+        total: Math.max(0, Math.round((next.subtotal - next.discountAmount) * 100) / 100),
+      }
+      invoices = invoices.map((i) => (i.id === invoice.id ? updated : i))
+      return updated
+    },
 
     /** An owner cancellation voids the invoice unless it was already paid (voidIfPending). */
     voidInvoice(orderId: string) {
@@ -321,7 +339,9 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     /** Adds an order directly, e.g. to set up a test. One past confirmation gets its invoice. */
     seed(order: StoredOrder) {
       orders = [...orders, order]
-      if (CONFIRMED_ONCE.includes(order.status)) this.issueInvoice(order)
+      // Issued when it was confirmed: an hour after it was placed, say, and never in the future.
+      const issuedAt = new Date(Math.min(Date.parse(order.createdAt) + 3_600_000, now().getTime()))
+      if (CONFIRMED_ONCE.includes(order.status)) this.issueInvoice(order, issuedAt)
     },
 
     reset() {
