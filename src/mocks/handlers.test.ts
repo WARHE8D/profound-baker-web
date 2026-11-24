@@ -380,6 +380,169 @@ describe('owner orders list', () => {
   })
 })
 
+/** A demo order's id, and its path params: SC-D001 is "001". */
+const id = (n: string) => `d0000000-0000-4000-8000-000000000${n}`
+const path = (n: string) => ({ params: { path: { id: id(n) } } })
+const putNotes = (n: string, notes: string) =>
+  unwrap(api.PUT('/api/orders/{id}/notes', { ...path(n), body: { notes } }))
+
+describe('owner order changes', () => {
+  beforeEach(async () => {
+    demoOrders(NOW).forEach((order) => mockStore.seed(order))
+    const tokens = await login(FIXTURE_OWNER_CREDENTIALS.password)
+    setAccessTokenProvider(() => tokens.accessToken)
+  })
+
+  test('moves an order only from the statuses the server allows, with a 400 otherwise', async () => {
+    const confirmed = await unwrap(api.PATCH('/api/orders/{id}/confirm', path('001')))
+    expect(confirmed.status).toBe('CONFIRMED')
+    expect(confirmed.updatedAt).toBe(NOW.toISOString())
+    const invoice = await unwrap(
+      api.GET('/api/orders/{orderId}/invoice', { params: { path: { orderId: id('001') } } }),
+    )
+    expect(invoice).toMatchObject({
+      number: expect.stringMatching(/^INV-2026-\d{4}$/),
+      status: 'PENDING',
+    })
+
+    expect(await failure(unwrap(api.PATCH('/api/orders/{id}/confirm', path('001'))))).toMatchObject(
+      {
+        status: 400,
+        message: 'cannot confirm an order in status CONFIRMED',
+      },
+    )
+    expect(
+      await failure(unwrap(api.PATCH('/api/orders/{id}/cancel', { ...path('002'), body: {} }))),
+    ).toMatchObject({ status: 400, message: 'a pending order is rejected, not cancelled' })
+    expect(
+      await failure(unwrap(api.PATCH('/api/orders/{id}/start-preparation', path('005')))),
+    ).toMatchObject({
+      status: 400,
+      message: 'cannot start preparation on an order in status IN_PROGRESS',
+    })
+    // Fulfilling straight from confirmed is allowed.
+    expect((await unwrap(api.PATCH('/api/orders/{id}/fulfill', path('004')))).status).toBe(
+      'FULFILLED',
+    )
+  })
+
+  test('a rejection needs a reason; a cancellation voids the unpaid invoice', async () => {
+    expect(
+      await failure(
+        unwrap(api.PATCH('/api/orders/{id}/reject', { ...path('002'), body: { reason: '  ' } })),
+      ),
+    ).toMatchObject({ status: 400, message: 'a rejection needs a reason' })
+    expect(
+      await failure(
+        unwrap(
+          api.PATCH('/api/orders/{id}/reject', {
+            ...path('002'),
+            body: { reason: 'x'.repeat(301) },
+          }),
+        ),
+      ),
+    ).toMatchObject({ status: 400, fieldErrors: [{ field: 'reason' }] })
+
+    const cancelled = await unwrap(
+      api.PATCH('/api/orders/{id}/cancel', { ...path('006'), body: {} }),
+    )
+    expect(cancelled).toMatchObject({ status: 'CANCELLED', cancellationReason: null })
+    const invoice = await unwrap(
+      api.GET('/api/orders/{orderId}/invoice', { params: { path: { orderId: id('006') } } }),
+    )
+    expect(invoice.status).toBe('VOID')
+    expect(
+      await failure(
+        unwrap(
+          api.GET('/api/orders/{orderId}/invoice', { params: { path: { orderId: id('002') } } }),
+        ),
+      ),
+    ).toMatchObject({ status: 404 })
+  })
+
+  test('reschedules to a free future slot, not counting the order itself', async () => {
+    const pickupAt = slotToUtc(MONDAY, '10:00', FIXTURE_TIME_ZONE)
+    const moved = await unwrap(
+      api.PUT('/api/orders/{id}/schedule', { ...path('003'), body: { pickupAt } }),
+    )
+    expect(moved.pickupAt).toBe(pickupAt)
+    // Its own place doesn't fill the slot it's already in.
+    expect(
+      (await unwrap(api.PUT('/api/orders/{id}/schedule', { ...path('003'), body: { pickupAt } })))
+        .pickupAt,
+    ).toBe(pickupAt)
+
+    const sunday = slotToUtc('2026-11-22', '10:00', FIXTURE_TIME_ZONE)
+    expect(
+      await failure(
+        unwrap(
+          api.PUT('/api/orders/{id}/schedule', { ...path('003'), body: { pickupAt: sunday } }),
+        ),
+      ),
+    ).toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/^not open for orders on 2026-11-22/),
+    })
+    const past = slotToUtc('2026-11-20', '09:00', FIXTURE_TIME_ZONE)
+    expect(
+      await failure(
+        unwrap(api.PUT('/api/orders/{id}/schedule', { ...path('003'), body: { pickupAt: past } })),
+      ),
+    ).toMatchObject({ status: 400, fieldErrors: [{ field: 'pickupAt' }] })
+    expect(
+      await failure(
+        unwrap(api.PUT('/api/orders/{id}/schedule', { ...path('009'), body: { pickupAt } })),
+      ),
+    ).toMatchObject({ status: 400, message: 'cannot reschedule an order in status FULFILLED' })
+  })
+
+  test('edits a pending order’s lines: kept lines keep their price, new ones are numbered after', async () => {
+    const order = mockStore.findById(id('002'))!
+    mockStore.updateOrder(order, {
+      lines: order.lines.map((l) => (l.lineNo === 1 ? { ...l, unitPrice: 40, lineTotal: 40 } : l)),
+    })
+    const edited = await unwrap(
+      api.PUT('/api/orders/{id}/lines', {
+        ...path('002'),
+        body: {
+          lines: [
+            { itemId: ids.items.chocolateCake, quantity: 2 },
+            { itemId: ids.items.croissant, quantity: 3 },
+          ],
+        },
+      }),
+    )
+    expect(edited.lines.map((l) => [l.lineNo, l.itemName, l.unitPrice, l.lineTotal])).toEqual([
+      [1, 'Chocolate fudge cake', 40, 80],
+      [3, 'Butter croissant', 3.75, 11.25],
+    ])
+    expect(edited.subtotal).toBe(91.25)
+
+    const edit = (lines: Schema<'OrderLineRequest'>[], n = '002') =>
+      failure(unwrap(api.PUT('/api/orders/{id}/lines', { ...path(n), body: { lines } })))
+    expect(await edit([{ itemId: ids.items.cinnamonRoll, quantity: 1 }])).toMatchObject({
+      status: 409,
+    })
+    expect(await edit([{ itemId: ids.items.croissant, quantity: 101 }])).toMatchObject({
+      status: 400,
+    })
+    expect(await edit([{ itemId: ids.items.sourdough, quantity: 11 }])).toMatchObject({
+      status: 400,
+      message: "not enough stock for 'Country sourdough'",
+    })
+    expect(await edit([{ itemId: ids.items.croissant, quantity: 1 }], '004')).toMatchObject({
+      status: 400,
+      message: 'cannot edit the lines of an order in status CONFIRMED',
+    })
+  })
+
+  test('notes: trimmed, blank clears them, only while pending', async () => {
+    expect((await putNotes('003', '  Extra crusty ')).notes).toBe('Extra crusty')
+    expect((await putNotes('003', '   ')).notes).toBeNull()
+    expect(await failure(putNotes('004', 'Too late'))).toMatchObject({ status: 400 })
+  })
+})
+
 /** How many orders are due for pickup from `from` (included) to `to` (excluded). */
 const ordersBetween = (from: string, to: string) =>
   unwrap(api.GET('/api/orders', { params: { query: { from, to } } })).then(

@@ -1,7 +1,6 @@
 import { Check, X } from 'lucide-react'
 import { cn } from '@/lib/cn'
-import type { GuestOrder } from './queries'
-import { type Step, timelineSteps } from './timeline'
+import { type Audience, type Step, type TimelineOrder, timelineSteps } from './timeline'
 
 const stateText: Record<Step['state'], string> = {
   done: 'done',
@@ -10,8 +9,10 @@ const stateText: Record<Step['state'], string> = {
   stopped: 'stopped here',
 }
 
-export function StatusTimeline({ order, zone }: { order: GuestOrder; zone: string }) {
-  const steps = timelineSteps(order, zone)
+type StatusTimelineProps = { order: TimelineOrder; zone: string; audience?: Audience }
+
+export function StatusTimeline({ order, zone, audience = 'guest' }: StatusTimelineProps) {
+  const steps = timelineSteps(order, zone, audience)
 
   return (
     <ol aria-label="Order progress" className="flex flex-col">

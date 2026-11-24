@@ -111,8 +111,14 @@ export const routes: RouteObject[] = [
               Component: (await import('@/features/items/ItemEditorPage')).ItemEditorPage,
             }),
           },
-          // S6.2 builds the order detail; the orders list already links to it.
-          { path: 'orders/:orderId', element: <ComingSoonPage title="Order details" sprint={6} /> },
+          {
+            path: 'orders/:orderId',
+            lazy: async () => ({
+              Component: (await import('@/features/orders/OrderDetailPage')).OrderDetailPage,
+            }),
+          },
+          // S7.1 builds the invoice view; orders already link to their invoice.
+          { path: 'invoices/:invoiceId', element: <ComingSoonPage title="Invoice" sprint={7} /> },
           ...ownerNav.map(({ path, label, sprint }): RouteObject => {
             const built = ownerPages[path]
             if (built) return { path, lazy: built }

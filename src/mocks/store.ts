@@ -18,6 +18,12 @@ export type StoredOrder = Schema<'OrderResponse'> & {
 }
 
 const ACTIVE: Schema<'OrderResponse'>['status'][] = ['PENDING', 'CONFIRMED', 'IN_PROGRESS']
+/** Statuses only reached by confirming the order, which issues its invoice. */
+const CONFIRMED_ONCE: Schema<'OrderResponse'>['status'][] = [
+  'CONFIRMED',
+  'IN_PROGRESS',
+  'FULFILLED',
+]
 const DAY_NAMES = [
   'SUNDAY',
   'MONDAY',
@@ -49,6 +55,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
   let fixedNow: Date | null = null
   const now = () => fixedNow ?? realNow()
   let orders: StoredOrder[] = []
+  let invoices: Schema<'InvoiceResponse'>[] = []
   let sequence = 0
   let profile: Schema<'OwnerProfileResponse'> = structuredClone(ownerProfile)
   let password: string = FIXTURE_OWNER_CREDENTIALS.password
@@ -64,8 +71,14 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     return `${prefix}-0000-4000-8000-${String(sequence).padStart(12, '0')}`
   }
 
-  /** One day of availability, computed like the backend: hours, closures, booked capacity. */
-  function dayAvailability(date: string): Schema<'DayAvailabilityResponse'> {
+  /**
+   * One day of availability, computed like the backend: hours, closures, booked capacity. A
+   * reschedule leaves out the order being moved, as AvailabilityService does.
+   */
+  function dayAvailability(
+    date: string,
+    excludeOrderId?: string,
+  ): Schema<'DayAvailabilityResponse'> {
     const weekday = DAY_NAMES[new Date(`${date}T12:00:00Z`).getUTCDay()]
     const hours = workingHours.find((h) => h.dayOfWeek === weekday)
     const blockedReason = isBlocked(blockedDates, date)
@@ -93,7 +106,7 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       const startsAt = slotToUtc(date, startTime, FIXTURE_TIME_ZONE)
       const endsAt = slotToUtc(date, endTime, FIXTURE_TIME_ZONE)
       const booked = orders.filter(
-        (o) => o.pickupAt === startsAt && ACTIVE.includes(o.status),
+        (o) => o.pickupAt === startsAt && ACTIVE.includes(o.status) && o.id !== excludeOrderId,
       ).length
       const remainingCapacity = Math.max(0, hours.maxConcurrentBookings - booked)
       slots.push({
@@ -201,10 +214,10 @@ export function createMockStore(options: { now?: () => Date } = {}) {
     today: () => todayIn(FIXTURE_TIME_ZONE, now()),
     dayAvailability,
 
-    /** The slot `pickupAt` falls on, if any. */
-    findSlot(pickupAt: string) {
+    /** The slot `pickupAt` falls on, if any (not counting `excludeOrderId` against its capacity). */
+    findSlot(pickupAt: string, excludeOrderId?: string) {
       const date = todayIn(FIXTURE_TIME_ZONE, new Date(pickupAt))
-      return dayAvailability(date).slots.find((s) => s.startsAt === pickupAt)
+      return dayAvailability(date, excludeOrderId).slots.find((s) => s.startsAt === pickupAt)
     },
 
     placeOrder(request: Schema<'CheckoutRequest'>): StoredOrder {
@@ -261,13 +274,59 @@ export function createMockStore(options: { now?: () => Date } = {}) {
       return updated
     },
 
-    /** Adds an order directly, e.g. to set up a test. */
+    /** Replaces the stored order with `changes` applied, stamping updatedAt as the server does. */
+    updateOrder(order: StoredOrder, changes: Partial<StoredOrder>): StoredOrder {
+      const lines = changes.lines ?? order.lines
+      const updated: StoredOrder = {
+        ...order,
+        ...changes,
+        subtotal: Math.round(lines.reduce((sum, l) => sum + l.lineTotal * 100, 0)) / 100,
+        updatedAt: now().toISOString(),
+      }
+      orders = orders.map((o) => (o.id === order.id ? updated : o))
+      return updated
+    },
+
+    /** Issues the order's invoice, numbered INV-<year>-NNNN like InvoiceService. */
+    issueInvoice(order: StoredOrder): Schema<'InvoiceResponse'> {
+      const year = todayIn(FIXTURE_TIME_ZONE, now()).slice(0, 4)
+      const invoice: Schema<'InvoiceResponse'> = {
+        id: nextId('60000000'),
+        number: `INV-${year}-${String(invoices.length + 1).padStart(4, '0')}`,
+        orderId: order.id,
+        orderReference: order.reference,
+        status: 'PENDING',
+        subtotal: order.subtotal,
+        discountAmount: 0,
+        total: order.subtotal,
+        paymentMethod: null,
+        paymentReference: null,
+        paidAt: null,
+        refundedAt: null,
+        issuedAt: now().toISOString(),
+      }
+      invoices = [...invoices, invoice]
+      return invoice
+    },
+
+    invoiceForOrder: (orderId: string) => invoices.find((i) => i.orderId === orderId),
+
+    /** An owner cancellation voids the invoice unless it was already paid (voidIfPending). */
+    voidInvoice(orderId: string) {
+      invoices = invoices.map((i) =>
+        i.orderId === orderId && i.status === 'PENDING' ? { ...i, status: 'VOID' } : i,
+      )
+    },
+
+    /** Adds an order directly, e.g. to set up a test. One past confirmation gets its invoice. */
     seed(order: StoredOrder) {
       orders = [...orders, order]
+      if (CONFIRMED_ONCE.includes(order.status)) this.issueInvoice(order)
     },
 
     reset() {
       orders = []
+      invoices = []
       sequence = 0
       fixedNow = null
       profile = structuredClone(ownerProfile)
