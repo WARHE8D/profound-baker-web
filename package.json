@@ -18,6 +18,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:backend": "docker compose -f e2e/compose.yaml up -d --build --wait",
+    "e2e:backend:down": "docker compose -f e2e/compose.yaml down",
+    "e2e:serve": "vite build && vite preview --port 4173 --strictPort",
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "npm exec --yes --package=openapi-typescript@7.13.0 --package=typescript@5.9.3 -- openapi-typescript openapi/openapi.json -o src/api/schema.d.ts",
     "api:types": "npm run api:fetch && npm run api:generate",
@@ -40,6 +44,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tanstack/react-query-devtools": "^5.108.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

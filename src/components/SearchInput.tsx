@@ -12,7 +12,10 @@ type SearchInputProps = {
   maxLength?: number
 }
 
-/** Search as you type, sent once typing pauses (300 ms). */
+/**
+ * Search as you type, sent once typing pauses (300 ms), or at once when the box loses focus: a
+ * click on a result must not race a search still waiting to be sent.
+ */
 export function SearchInput({ value, onChange, label, placeholder, maxLength }: SearchInputProps) {
   const [text, setText] = useState(value)
   const [synced, setSynced] = useState(value)
@@ -41,6 +44,7 @@ export function SearchInput({ value, onChange, label, placeholder, maxLength }: 
         maxLength={maxLength}
         value={text}
         onChange={(event) => setText(event.target.value)}
+        onBlur={() => text.trim() !== value && onChange(text.trim())}
         className="pl-9"
       />
     </div>

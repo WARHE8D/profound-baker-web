@@ -53,6 +53,7 @@ npm run dev                   # http://localhost:5173
 | `src/features/<area>/` | One folder per feature area (catalogue, cart, checkout, orders, …) |
 | `src/components/`      | Shared UI primitives                                               |
 | `src/lib/`             | Framework-free helpers (money, dates, …)                           |
+| `e2e/`                 | Playwright end-to-end tests and the backend they run against       |
 
 Import from `src` with the `@/` alias, for example `import { App } from '@/app/App'`.
 
@@ -96,11 +97,15 @@ Vite exposes `VITE_`-prefixed variables to the browser, so **never put secrets i
 | `npm test`                        | Run the tests once (Vitest + React Testing Library)   |
 | `npm run test:watch`              | Run the tests in watch mode                           |
 | `npm run test:coverage`           | Run the tests with a coverage report in `coverage/`   |
+| `npm run e2e:backend`             | Start the backend for the end-to-end tests (Docker)   |
+| `npm run e2e`                     | Run the end-to-end tests (Playwright)                 |
+| `npm run e2e:backend:down`        | Stop that backend and drop its data                   |
 | `npm run api:types`               | Refresh the API spec and types from a running backend |
 | `npm run api:check`               | Check the API types match the committed spec          |
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `format:check`, `lint`, `api:check`,
-`typecheck`, `test:coverage` and `build` on every push and pull request.
+`typecheck`, `test:coverage` and `build` on every push and pull request, and the end-to-end tests
+alongside them.
 
 ### API types
 
@@ -156,6 +161,35 @@ real server.
 - `src/mocks/store.ts` keeps orders placed through checkout, so a flow can check out, open the
   magic link and cancel. Tests can freeze its clock with `mockStore.setNow(date)`. It resets after
   every test.
+
+### End-to-end tests
+
+[Playwright](https://playwright.dev) tests in `e2e/` click through the built SPA in Chrome against a
+real backend:
+
+- **Guest:** menu → item → cart → pickup slot → checkout → the magic link → cancel the order.
+- **Owner:** sign in → find the order → confirm it (which issues the invoice) → mark the invoice paid.
+- **Session:** the access token expires (the page's clock is moved on 16 minutes) and is refreshed;
+  a reload restores the session from the stored refresh token; signing out ends it.
+
+The backend runs from [e2e/compose.yaml](e2e/compose.yaml): profound-baker-server built from a
+checkout of its repository, with Postgres in memory. Its Owner, time zone, CORS origin and relaxed
+rate limits are set there. Before the tests, `e2e/global-setup.ts` opens the bakery every day and
+adds a test category and item through the API, so a fresh database is enough. Each test places its
+own orders.
+
+```sh
+# Once: the server repository next to this one (or set SERVER_DIR to its path, relative to e2e/)
+git clone https://github.com/WARHE8D/profound-baker-server ../profound-baker-server
+
+npm run e2e:backend      # build and start it on :8080; waits until it is healthy
+npm run e2e              # builds the SPA with VITE_API_BASE_URL=http://localhost:8080, serves it on :4173
+npm run e2e:backend:down # stop it; the data goes with it
+```
+
+Locally the tests use the installed Chrome; CI installs Playwright's Chromium. A failing test
+leaves a trace in `test-results/` (`npx playwright show-trace <file>`). In CI the backend's logs
+are printed and the report is uploaded as an artifact.
 
 ### Mocked dev mode
 

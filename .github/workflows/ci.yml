@@ -1,4 +1,5 @@
-# Checks formatting, lint, types, tests and the production build on every push and pull request.
+# Checks formatting, lint, types, tests and the production build on every push and pull request,
+# and runs the end-to-end tests against the real backend.
 # Must pass before merging.
 name: CI
 
@@ -60,3 +61,53 @@ jobs:
           path: coverage/
           retention-days: 7
           if-no-files-found: ignore
+
+  e2e:
+    name: end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The backend, built from its main branch: the SPA is tested against the API it will meet.
+      - name: Checkout the server
+        uses: actions/checkout@v7
+        with:
+          repository: WARHE8D/profound-baker-server
+          path: profound-baker-server
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start the backend
+        run: npm run e2e:backend
+        env:
+          SERVER_DIR: ../profound-baker-server
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+
+      # Playwright builds and serves the SPA itself (npm run e2e:serve).
+      - name: End-to-end tests
+        run: npm run e2e
+
+      - name: Backend logs
+        if: failure()
+        run: docker compose -f e2e/compose.yaml logs app
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
