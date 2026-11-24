@@ -64,6 +64,18 @@ test('a search the URL hasn’t shown yet is not sent twice', () => {
   expect(onChange).toHaveBeenCalledOnce()
 })
 
+test('once focus has left the box, the search waiting for typing to pause is not sent again', () => {
+  const onChange = vi.fn<(value: string) => void>()
+  // Nothing re-renders the box: a click on a result has started the move to another page, which a
+  // late second search would cancel.
+  render(<SearchInput label="Search orders" value="" onChange={onChange} />)
+
+  fireEvent.change(box(), { target: { value: 'SC-12' } })
+  fireEvent.blur(box())
+  act(() => vi.advanceTimersByTime(1000))
+  expect(onChange).toHaveBeenCalledExactlyOnceWith('SC-12')
+})
+
 test('the same search can be sent again once the value has moved on', () => {
   const onSearch = vi.fn<(value: string) => void>()
   render(<Harness onSearch={onSearch} />)

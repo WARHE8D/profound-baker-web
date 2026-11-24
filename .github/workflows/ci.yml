@@ -86,11 +86,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The site as it is deployed: this repository's image behind the server's own Caddyfile, one origin.
-      - name: Start the backend and the production image
-        run: npm run e2e:production:up
+      # The server's e2e stack: production's compose file with this commit's image behind its Caddyfile,
+      # one origin. No backups here, so the bakery starts empty: no production data in CI.
+      - name: Start the e2e stack
+        run: npm run e2e:stack
         env:
-          SERVER_DIR: ../profound-baker-server
+          SERVER_DIR: profound-baker-server
 
       - name: Install the browser
         run: npx playwright install --with-deps chromium
@@ -100,7 +101,9 @@ jobs:
 
       - name: Backend logs
         if: failure()
-        run: docker compose -f e2e/compose.yaml --profile production logs app edge
+        run: npm run e2e:stack:logs -- db-restore uploads-restore app web caddy
+        env:
+          SERVER_DIR: profound-baker-server
 
       - name: Upload the Playwright report
         if: failure()

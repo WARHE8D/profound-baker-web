@@ -42,11 +42,15 @@ export function SearchInput({ value, onChange, label, placeholder, maxLength }: 
     [value],
   )
 
+  // The search waiting for typing to pause. Leaving the box sends it at once, and cancels it: when
+  // that blur came from a click on a result, nothing re-renders the box before it would fire, and a
+  // second search then would cancel the move to the result's page.
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => {
     const next = text.trim()
     if (!needsSending(next)) return
-    const timer = setTimeout(() => send(next), 300)
-    return () => clearTimeout(timer)
+    timer.current = setTimeout(() => send(next), 300)
+    return () => clearTimeout(timer.current)
   }, [text, needsSending, send])
 
   return (
@@ -63,6 +67,7 @@ export function SearchInput({ value, onChange, label, placeholder, maxLength }: 
         value={text}
         onChange={(event) => setText(event.target.value)}
         onBlur={() => {
+          clearTimeout(timer.current)
           const next = text.trim()
           if (needsSending(next)) send(next)
         }}

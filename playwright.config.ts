@@ -5,7 +5,7 @@ const CI = Boolean(process.env.CI)
 
 /**
  * End-to-end tests: the built SPA in a real browser against a real backend.
- * Start the backend first (`npm run e2e:backend`, see README.md "End-to-end tests");
+ * Start the backend first (`npm run e2e:stack`, see README.md "End-to-end tests");
  * Playwright builds and serves the SPA itself.
  */
 export default defineConfig({
