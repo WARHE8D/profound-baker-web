@@ -26,13 +26,17 @@ async function ok<T>(
   return data as T
 }
 
-/** An access token for the Owner. */
-export async function ownerToken(): Promise<string> {
-  const tokens = await ok(
+/** A new session for the Owner: an access and a refresh token. */
+export function ownerLogin(): Promise<Schema<'TokenResponse'>> {
+  return ok(
     'login',
     client.POST('/api/auth/login', { body: { email: OWNER.email, password: OWNER.password } }),
   )
-  return tokens.accessToken
+}
+
+/** An access token for the Owner. */
+export async function ownerToken(): Promise<string> {
+  return (await ownerLogin()).accessToken
 }
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } })
@@ -143,5 +147,16 @@ export async function placeOrder(item: Item, daysAhead = 3): Promise<PlacedOrder
         lines: [{ itemId: item.id, quantity: 2 }],
       },
     }),
+  )
+}
+
+/** Confirms an order as the Owner and returns the invoice that issues. */
+export async function confirmOrder(orderId: string): Promise<Schema<'InvoiceResponse'>> {
+  const token = await ownerToken()
+  const path = { params: { path: { id: orderId } }, ...auth(token) }
+  await ok('confirm', client.PATCH('/api/orders/{id}/confirm', path))
+  return ok(
+    'invoice',
+    client.GET('/api/orders/{orderId}/invoice', { params: { path: { orderId } }, ...auth(token) }),
   )
 }

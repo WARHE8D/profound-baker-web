@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
+import { focusPageHeading } from './page-focus'
 
 type DialogProps = {
   open: boolean
@@ -14,8 +15,10 @@ type DialogProps = {
 }
 
 /**
- * Modal dialog on the native <dialog> element: the browser traps focus, closes on Esc and returns
- * focus to the element that opened it.
+ * Modal dialog on the native <dialog> element: the browser traps focus and closes it on Esc.
+ * Closing (or removing it while open) gives focus back to the element that opened it, or, when
+ * the action removed that element (a "Cancel order" button once the order is cancelled), to the
+ * page's heading, rather than leaving it nowhere.
  */
 export function Dialog({
   open,
@@ -27,15 +30,30 @@ export function Dialog({
   children,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const opener = useRef<Element | null>(null)
   const titleId = useId()
   const descriptionId = useId()
 
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
+    if (open && !dialog.open) {
+      opener.current = document.activeElement
+      dialog.showModal()
+    }
+    if (!open && dialog.open) {
+      dialog.close()
+      returnFocus(opener.current)
+    }
   }, [open])
+
+  // Removed while open (`{open && <Dialog …>}`): never closed, so nothing would move focus.
+  useEffect(() => {
+    const dialog = ref.current
+    return () => {
+      if (dialog?.open) returnFocus(opener.current)
+    }
+  }, [])
 
   return (
     // The backdrop click below is a mouse shortcut; Esc (onCancel) is its keyboard equivalent.
@@ -87,4 +105,9 @@ export function Dialog({
       </div>
     </dialog>
   )
+}
+
+function returnFocus(opener: Element | null) {
+  if (opener instanceof HTMLElement && opener.isConnected) opener.focus()
+  else focusPageHeading()
 }

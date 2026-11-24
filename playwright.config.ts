@@ -12,6 +12,8 @@ export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
   fullyParallel: true,
+  // Every test shares one backend: more browsers at once only slow it down.
+  workers: CI ? 2 : 4,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
   reporter: CI ? [['list'], ['html', { open: 'never' }]] : 'list',

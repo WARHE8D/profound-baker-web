@@ -39,6 +39,7 @@ export function GuestOrderPage() {
     const failed = order.isError ? order : bakery
     content = (
       <ErrorState
+        level={1}
         error={failed.error}
         title="We couldn't load your order"
         onRetry={() => void failed.refetch()}
@@ -223,6 +224,7 @@ function LinkInvalid({ bakery }: { bakery: Bakery | undefined }) {
   return (
     <div className="flex flex-col items-center gap-6">
       <EmptyState
+        level={1}
         icon="🔗"
         title="This order link is expired or invalid"
         description="Check that you copied the whole link. If it still doesn't work, contact the bakery with your order reference."

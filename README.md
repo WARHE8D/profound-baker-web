@@ -171,6 +171,8 @@ real backend:
 - **Owner:** sign in → find the order → confirm it (which issues the invoice) → mark the invoice paid.
 - **Session:** the access token expires (the page's clock is moved on 16 minutes) and is refreshed;
   a reload restores the session from the stored refresh token; signing out ends it.
+- **Accessibility:** axe on every page at three widths and in both themes, and both flows with the
+  keyboard alone (see [Accessibility](#accessibility)).
 
 The backend runs from [e2e/compose.yaml](e2e/compose.yaml): profound-baker-server built from a
 checkout of its repository, with Postgres in memory. Its Owner, time zone, CORS origin and relaxed
@@ -190,6 +192,23 @@ npm run e2e:backend:down # stop it; the data goes with it
 Locally the tests use the installed Chrome; CI installs Playwright's Chromium. A failing test
 leaves a trace in `test-results/` (`npx playwright show-trace <file>`). In CI the backend's logs
 are printed and the report is uploaded as an artifact.
+
+### Accessibility
+
+The target is WCAG 2.2 AA, checked by tests rather than by hand:
+
+- **axe** ([e2e/accessibility.spec.ts](e2e/accessibility.spec.ts)) audits every page, plus its
+  dialogs, at 360 px, 768 px and 1280 px, in light and dark mode. It checks colour contrast, names,
+  roles and target sizes, and fails if a page scrolls sideways.
+- **Keyboard only** ([e2e/keyboard.spec.ts](e2e/keyboard.spec.ts)): the guest's order and cancel,
+  and the Owner's confirm and payment. Every control is reached with Tab and used with Enter, Space
+  or typing.
+- **Focus after navigation** (`RouteFocus`): on a move to another page, focus goes to its `<h1>`,
+  and the tab's title becomes "<h1> · SugarCrumbs". Filters and sorting don't move focus. When the
+  focused button goes away (an order once confirmed), focus goes to the `<h1>`, not back to the top
+  of the document.
+- **Dialogs** are native `<dialog>`s: focus stays inside, Esc closes them, and focus goes back to
+  the button that opened them.
 
 ### Mocked dev mode
 

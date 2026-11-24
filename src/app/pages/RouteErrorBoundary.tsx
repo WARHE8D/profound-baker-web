@@ -21,6 +21,7 @@ export function RouteErrorBoundary() {
   return (
     <div role="alert" className="mx-auto max-w-2xl px-4 py-16">
       <EmptyState
+        level={1}
         icon="🍞"
         title="Something went wrong"
         description={

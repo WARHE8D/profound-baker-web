@@ -8,10 +8,20 @@ type EmptyStateProps = {
   icon?: ReactNode
   /** Usually one Button, e.g. "Add your first item". */
   action?: ReactNode
+  /** The heading's level: 1 when this is all the page shows (not found, failed to load). */
+  level?: 1 | 2 | 3
   className?: string
 }
 
-export function EmptyState({ title, description, icon, action, className }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  icon,
+  action,
+  level = 3,
+  className,
+}: EmptyStateProps) {
+  const Heading = `h${level}` as const
   return (
     <div
       className={cn(
@@ -24,7 +34,7 @@ export function EmptyState({ title, description, icon, action, className }: Empt
           {icon}
         </div>
       )}
-      <h3 className="text-lg font-semibold">{title}</h3>
+      <Heading className="text-lg font-semibold">{title}</Heading>
       {description && <p className="max-w-sm text-sm text-muted">{description}</p>}
       {action && <div className="pt-2">{action}</div>}
     </div>

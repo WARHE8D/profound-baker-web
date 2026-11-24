@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Schema } from '@/api'
 import { cn } from '@/lib/cn'
 import { formatMoney, formatMoneyWhole } from '@/lib/money'
+import { useMediaQuery } from '@/lib/use-media-query'
 import { formatMonth, niceTicks } from './revenue'
 
 type MonthlyRevenue = Schema<'MonthlyRevenue'>
@@ -15,8 +16,13 @@ type RevenueChartProps = {
  * Paid revenue per month as columns: one series, so one colour and no legend (the section's title
  * names it). Each column is a button the size of its whole slot, so hovering or focusing anywhere
  * above a short bar shows its tooltip. A table view carries the same numbers.
+ *
+ * Phones plot the last six months only: twelve columns would be too narrow to tap (WCAG's 24 px
+ * target size). The table still lists them all.
  */
-export function RevenueChart({ months }: RevenueChartProps) {
+export function RevenueChart({ months: all }: RevenueChartProps) {
+  const wide = useMediaQuery('(min-width: 40rem)', true)
+  const months = wide ? all : all.slice(-6)
   const [active, setActive] = useState<number | null>(null)
   const ticks = niceTicks(Math.max(...months.map((m) => m.revenue)))
   const top = ticks.at(-1)!
@@ -129,6 +135,11 @@ export function RevenueChart({ months }: RevenueChartProps) {
         </div>
       </div>
 
+      {!wide && all.length > months.length && (
+        <p className="text-xs text-muted">
+          The last {months.length} months. The table has all {all.length}.
+        </p>
+      )}
       <details className="text-sm">
         <summary className="cursor-pointer text-muted hover:text-text">Show as a table</summary>
         <table className="mt-2 w-full max-w-md">
@@ -147,7 +158,7 @@ export function RevenueChart({ months }: RevenueChartProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border tabular-nums">
-            {months.map((month) => (
+            {all.map((month) => (
               <tr key={month.month}>
                 <th scope="row" className="py-1.5 pr-2 text-left font-normal">
                   {formatMonth(month.month, { long: true })}

@@ -23,8 +23,8 @@
   --danger: #b42318;
   --danger-hover: #912018;
   --danger-fg: #ffffff;
-  --success: #2f7a3e;
-  --warning: #9a5a00;
+  --success: #2a6e38;
+  --warning: #8a5000;
 
   --ring: #c2621a;
 
@@ -107,6 +107,11 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
   }
+
+  /* Headings and landmarks focused by script (RouteFocus) to announce a page: not a control. */
+  [tabindex='-1']:focus {
+    @apply outline-none;
+  }
 }
 
 /*
@@ -123,8 +128,8 @@
     --text: #1a110b;
     --text-muted: #5a4638;
     --primary: #9a4a12;
-    --success: #2f7a3e;
-    --warning: #9a5a00;
+    --success: #2a6e38;
+    --warning: #8a5000;
     --danger: #b42318;
   }
 

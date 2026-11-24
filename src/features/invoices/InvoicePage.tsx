@@ -35,6 +35,7 @@ export function InvoicePage() {
   if (isApiError(invoice.error) && (invoice.error.status === 404 || invoice.error.status === 400)) {
     content = (
       <EmptyState
+        level={1}
         icon="🧾"
         title="Invoice not found"
         description="It may have been mistyped, or the link is out of date."
@@ -47,6 +48,7 @@ export function InvoicePage() {
     const failed = invoice.isError ? invoice : profile
     content = (
       <ErrorState
+        level={1}
         error={failed.error}
         title="We couldn't load this invoice"
         onRetry={() => void failed.refetch()}

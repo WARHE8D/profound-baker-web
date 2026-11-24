@@ -57,6 +57,7 @@ export function OrderDetailPage() {
   if (isApiError(order.error) && (order.error.status === 404 || order.error.status === 400)) {
     content = (
       <EmptyState
+        level={1}
         icon="🔎"
         title="Order not found"
         description="It may have been mistyped, or the link is out of date."
@@ -69,6 +70,7 @@ export function OrderDetailPage() {
     const failed = order.isError ? order : bakery
     content = (
       <ErrorState
+        level={1}
         error={failed.error}
         title="We couldn't load this order"
         onRetry={() => void failed.refetch()}

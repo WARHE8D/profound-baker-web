@@ -48,3 +48,32 @@ test('sends a waiting search at once when the box loses focus, and only once', (
   fireEvent.blur(box())
   expect(onSearch).toHaveBeenCalledOnce()
 })
+
+test('a search the URL hasn’t shown yet is not sent twice', () => {
+  const onChange = vi.fn<(value: string) => void>()
+  // The parent never passes the new value back, as while the app moves to another page.
+  const { rerender } = render(<SearchInput label="Search orders" value="" onChange={onChange} />)
+
+  fireEvent.change(box(), { target: { value: 'SC-12' } })
+  fireEvent.blur(box())
+  expect(onChange).toHaveBeenCalledExactlyOnceWith('SC-12')
+
+  // Re-rendered with a new callback (every render of a list page makes one): still once.
+  rerender(<SearchInput label="Search orders" value="" onChange={(v) => onChange(v)} />)
+  act(() => vi.advanceTimersByTime(1000))
+  expect(onChange).toHaveBeenCalledOnce()
+})
+
+test('the same search can be sent again once the value has moved on', () => {
+  const onSearch = vi.fn<(value: string) => void>()
+  render(<Harness onSearch={onSearch} />)
+
+  fireEvent.change(box(), { target: { value: 'SC-12' } })
+  act(() => vi.advanceTimersByTime(300))
+  fireEvent.change(box(), { target: { value: '' } })
+  act(() => vi.advanceTimersByTime(300))
+  fireEvent.change(box(), { target: { value: 'SC-12' } })
+  act(() => vi.advanceTimersByTime(300))
+
+  expect(onSearch.mock.calls).toEqual([['SC-12'], [''], ['SC-12']])
+})

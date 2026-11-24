@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Input } from './controls'
 
 type SearchInputProps = {
@@ -25,11 +25,29 @@ export function SearchInput({ value, onChange, label, placeholder, maxLength }: 
     setText(value)
   }
 
+  // The search last sent, and the value it replaced. Until the value changes, the URL may not show
+  // it yet (or ever, if the user has moved to another page meanwhile): sending it again would
+  // cancel that navigation.
+  const sent = useRef<{ text: string; from: string } | null>(null)
+  const send = useCallback(
+    (next: string) => {
+      sent.current = { text: next, from: value }
+      onChange(next)
+    },
+    [onChange, value],
+  )
+  const needsSending = useCallback(
+    (next: string) =>
+      next !== value && !(sent.current?.text === next && sent.current.from === value),
+    [value],
+  )
+
   useEffect(() => {
-    if (text.trim() === value) return
-    const timer = setTimeout(() => onChange(text.trim()), 300)
+    const next = text.trim()
+    if (!needsSending(next)) return
+    const timer = setTimeout(() => send(next), 300)
     return () => clearTimeout(timer)
-  }, [text, value, onChange])
+  }, [text, needsSending, send])
 
   return (
     <div className="relative">
@@ -44,7 +62,10 @@ export function SearchInput({ value, onChange, label, placeholder, maxLength }: 
         maxLength={maxLength}
         value={text}
         onChange={(event) => setText(event.target.value)}
-        onBlur={() => text.trim() !== value && onChange(text.trim())}
+        onBlur={() => {
+          const next = text.trim()
+          if (needsSending(next)) send(next)
+        }}
         className="pl-9"
       />
     </div>

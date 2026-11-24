@@ -100,7 +100,7 @@ function Dashboard({ summary, zone }: { summary: Summary; zone: string }) {
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <StatTile
           to={`/owner/orders?from=${summary.today}&to=${summary.today}&dir=asc`}
           icon={<ShoppingBag aria-hidden="true" className="size-5" />}

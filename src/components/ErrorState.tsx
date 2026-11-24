@@ -11,6 +11,8 @@ type ErrorStateProps = {
   onRetry?: () => void
   /** The retry is running: the button shows a spinner. */
   retrying?: boolean
+  /** The heading's level: 1 when the failure is all the page shows. */
+  level?: 1 | 2 | 3
   className?: string
 }
 
@@ -23,6 +25,7 @@ export function ErrorState({
   title = "We couldn't load this",
   onRetry,
   retrying = false,
+  level,
   className,
 }: ErrorStateProps) {
   const apiError = isApiError(error) ? error : undefined
@@ -31,6 +34,7 @@ export function ErrorState({
     <div role="alert" className={className}>
       <EmptyState
         icon="🥖"
+        level={level}
         title={title}
         description={
           <>

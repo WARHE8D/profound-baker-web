@@ -62,6 +62,7 @@ export function ItemEditorPage() {
   if (!isNew && (validId === null || (isApiError(item.error) && item.error.status === 404))) {
     content = (
       <EmptyState
+        level={1}
         icon="🥐"
         title="This item doesn't exist"
         description="It may have been deleted."
@@ -72,6 +73,7 @@ export function ItemEditorPage() {
     const failed = item.isError ? item : categories
     content = (
       <ErrorState
+        level={1}
         error={failed.error}
         title="We couldn't load this item"
         onRetry={() => void failed.refetch()}
@@ -82,6 +84,7 @@ export function ItemEditorPage() {
     content =
       categories.data.length === 0 ? (
         <EmptyState
+          level={1}
           icon="🏷️"
           title="Add a category first"
           description="Every item belongs to a category, so guests can find it."

@@ -106,7 +106,7 @@ function DayCell({
   if (!day) {
     // Before the earliest possible pickup, or past the booking window.
     return (
-      <span className="flex h-10 items-center justify-center text-sm text-muted/50">{number}</span>
+      <span className="flex h-10 items-center justify-center text-sm text-muted">{number}</span>
     )
   }
 

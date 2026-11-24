@@ -6,6 +6,7 @@ import { session } from '@/features/auth/session'
 import { meQuery } from '@/features/auth/use-session'
 import { pendingCountQuery } from '@/features/orders/owner-queries'
 import { dismissPasswordReminder, usePasswordReminder } from '@/features/profile/password-reminder'
+import { RouteFocus } from '@/components'
 import { cn } from '@/lib/cn'
 import { ownerNav } from './owner-nav'
 import { SkipLink } from './SkipLink'
@@ -69,6 +70,7 @@ export function OwnerLayout() {
           <Outlet />
         </div>
       </main>
+      <RouteFocus />
       <ScrollRestoration />
     </div>
   )
